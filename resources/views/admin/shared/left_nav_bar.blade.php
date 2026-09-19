@@ -61,6 +61,44 @@
 				<div class="text-truncate" data-i18n="Dashboards">Dashboard</div>
 			</a>
 		</li>
+		@if (Auth::user()?->hasPermission('brands.view'))
+		<li class="menu-item {{ (isset($leftMenuActive) && $leftMenuActive == 'brands') ? 'active' : '' }}">
+			<a href="{{ route('admin.brands.index') }}" class="menu-link">
+				<i class="menu-icon tf-icons bx bx-car"></i>
+				<div class="text-truncate" data-i18n="Brands">Brands</div>
+			</a>
+		</li>
+		@endif
+		@if (Auth::user()?->hasPermission('cars.view'))
+		<li class="menu-item {{ (isset($leftMenuActive) && $leftMenuActive == 'cars') ? 'active' : '' }}">
+			<a href="{{ route('admin.cars.index') }}" class="menu-link"><i class="menu-icon tf-icons bx bx-car"></i><div class="text-truncate" data-i18n="Cars">Cars / Models</div></a>
+		</li>
+		@endif
+		@if (Auth::user()?->hasPermission('variants.view'))
+		<li class="menu-item {{ (isset($leftMenuActive) && $leftMenuActive == 'variants') ? 'active' : '' }}">
+			<a href="{{ route('admin.variants.index') }}" class="menu-link"><i class="menu-icon tf-icons bx bx-list-ul"></i><div class="text-truncate" data-i18n="Variants">Variants</div></a>
+		</li>
+		@endif
+		@if (Auth::user()?->hasPermission('specification_categories.view'))
+		<li class="menu-item {{ (isset($leftMenuActive) && $leftMenuActive == 'specification-categories') ? 'active' : '' }}">
+			<a href="{{ route('admin.specification-categories.index') }}" class="menu-link"><i class="menu-icon tf-icons bx bx-category-alt"></i><div class="text-truncate" data-i18n="Specifications">Specification Categories</div></a>
+		</li>
+		@endif
+		@if (Auth::user()?->hasPermission('specification_definitions.view'))
+		<li class="menu-item {{ (isset($leftMenuActive) && $leftMenuActive == 'specification-definitions') ? 'active' : '' }}">
+			<a href="{{ route('admin.specification-definitions.index') }}" class="menu-link"><i class="menu-icon tf-icons bx bx-list-check"></i><div class="text-truncate" data-i18n="Definitions">Specification Definitions</div></a>
+		</li>
+		@endif
+		@if (Auth::user()?->hasPermission('feature_categories.view'))
+		<li class="menu-item {{ (isset($leftMenuActive) && $leftMenuActive == 'feature-categories') ? 'active' : '' }}">
+			<a href="{{ route('admin.feature-categories.index') }}" class="menu-link"><i class="menu-icon tf-icons bx bx-folder"></i><div class="text-truncate" data-i18n="Feature Categories">Feature Categories</div></a>
+		</li>
+		@endif
+		@if (Auth::user()?->hasPermission('features.view'))
+		<li class="menu-item {{ (isset($leftMenuActive) && $leftMenuActive == 'features') ? 'active' : '' }}">
+			<a href="{{ route('admin.features.index') }}" class="menu-link"><i class="menu-icon tf-icons bx bx-star"></i><div class="text-truncate" data-i18n="Features">Features</div></a>
+		</li>
+		@endif
 		<li class="menu-item {{ (isset($leftMenuActive) && $leftMenuActive == 'blog-category') ? 'active' : '' }}">
 			<a href="{{url('admin/blog-categories')}}" class="menu-link">
 				<i class="menu-icon tf-icons bx bx-cube-alt"></i>

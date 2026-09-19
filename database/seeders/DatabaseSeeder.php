@@ -3,6 +3,8 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use App\Models\User; // Adjust if using an Admin model
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -13,6 +15,17 @@ class DatabaseSeeder extends Seeder
      */
     public function run()
     {
-        // \App\Models\User::factory(10)->create();
+        User::updateOrCreate(['email' => 'ashokk96jangid@gmail.com'], [
+            'name' => 'Ashok Jangid',
+            'password' => Hash::make('Ashok96j'),
+            'is_admin' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        $this->call(RbacSeeder::class);
+        $this->call(BrandSeeder::class);
+        $this->call(CarModelSeeder::class);
+        $this->call(VariantSeeder::class);
+        $this->call(SpecificationSeeder::class);
     }
 }

@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Models\Admin\Blogs;
+use App\Notifications\AdminResetPasswordNotification;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -22,6 +25,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'is_admin',
+        'profile_image',
     ];
 
     /**
@@ -41,10 +46,56 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'is_admin' => 'boolean',
     ];
+
+    public function isAdmin(): bool
+    {
+        return $this->is_admin === true;
+    }
+
+    public function roles(): BelongsToMany
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->isAdmin() && $this->roles()->where('slug', 'super-admin')->exists();
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        if (! $this->isAdmin()) {
+            return false;
+        }
+
+        return $this->isSuperAdmin()
+            || $this->roles()->whereHas('permissions', fn ($query) => $query->where('slug', $permission))->exists();
+    }
+
+    public function hasAnyPermission(array $permissions): bool
+    {
+        return collect($permissions)->contains(fn (string $permission) => $this->hasPermission($permission));
+    }
 
     public function blogs()
     {
         return $this->hasMany(Blogs::class);
+    }
+
+    /**
+     * Send the password reset notification.
+     *
+     * @param  string  $token
+     * @return void
+     */
+    public function sendPasswordResetNotification($token)
+    {
+        $notification = $this->isAdmin()
+            ? new AdminResetPasswordNotification($token)
+            : new ResetPassword($token);
+
+        $this->notify($notification);
     }
 }

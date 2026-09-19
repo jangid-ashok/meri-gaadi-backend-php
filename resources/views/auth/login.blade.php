@@ -141,16 +141,16 @@
 							<div class="mb-8">
 								<div class="d-flex justify-content-between">
 									<div class="form-check mb-0">
-										<input class="form-check-input" type="checkbox" id="remember-me" />
+										<input class="form-check-input" type="checkbox" id="remember-me" name="remember" value="1" />
 										<label class="form-check-label" for="remember-me"> Remember Me </label>
 									</div>
-									<a href="auth-forgot-password-basic.html">
+									<a href="{{ url ('forgot-password') }}">
 										<span>Forgot Password?</span>
 									</a>
 								</div>
 							</div>
 							<div class="mb-6">
-								<button class="btn btn-primary d-grid w-100" type="submit">Login</button>
+								<button class="btn btn-primary rounded-pill d-grid w-100" type="submit"><i class="icon-base bx bx-log-in me-1"></i>Login</button>
 							</div>
 						</form>
 					</div>

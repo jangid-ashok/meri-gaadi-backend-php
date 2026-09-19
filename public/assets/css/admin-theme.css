@@ -1,0 +1,42 @@
+/* Shared admin controls. Keep buttons visually consistent across modules. */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2.375rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.btn-sm {
+    min-height: 2rem;
+}
+
+.btn-icon {
+    width: 2.125rem;
+    min-width: 2.125rem;
+    padding: 0;
+    gap: 0;
+    border-radius: 50%;
+}
+
+.btn i,
+.btn .icon-base {
+    flex: 0 0 auto;
+    line-height: 1;
+}
+
+.btn.d-grid {
+    display: inline-flex !important;
+}
+
+.btn.w-100 {
+    width: 100%;
+}
+
+.btn-link {
+    min-height: auto;
+    border-radius: 0;
+}

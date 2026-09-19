@@ -42,6 +42,20 @@ return [
             'visibility' => 'public',
         ],
 
+        'brand_media' => [
+            'driver' => 'local',
+            'root' => public_path('assets/media'),
+            'url' => env('APP_URL').'/assets/media',
+            'visibility' => 'public',
+        ],
+
+        'car_media' => [
+            'driver' => 'local',
+            'root' => public_path('assets/media/cars'),
+            'url' => env('APP_URL').'/assets/media/cars',
+            'visibility' => 'public',
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

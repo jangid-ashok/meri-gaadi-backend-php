@@ -8,15 +8,15 @@ use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\Admin\AuthenticationController as AdminAuthenticationController;
+use App\Http\Controllers\Admin\AdminPasswordResetController;
+use App\Http\Controllers\Admin\AdminProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
     Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
 
     Route::post('register', [RegisteredUserController::class, 'store']);
-
-    Route::get('admin', [AuthenticatedSessionController::class, 'create'])->name('login');
-    Route::get('admin/login', [AuthenticatedSessionController::class, 'create'])->name('login');
 
     Route::get('login', [AuthenticatedSessionController::class, 'create'])->name('login');
 
@@ -26,9 +26,29 @@ Route::middleware('guest')->group(function () {
 
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])->name('password.email');
 
+    Route::get('reset-password-link', [PasswordResetLinkController::class, 'showLink'])->name('password.show-link');
+
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])->name('password.reset');
 
     Route::post('reset-password', [NewPasswordController::class, 'store'])->name('password.update');
+});
+
+Route::middleware(['admin.guest'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/', fn () => redirect()->route('login'));
+    Route::get('login', fn () => redirect()->route('login'))->name('login');
+    Route::get('forgot-password', [AdminPasswordResetController::class, 'create'])->name('password.request');
+    Route::post('forgot-password', [AdminPasswordResetController::class, 'email'])->middleware('throttle:5,1')->name('password.email');
+    Route::get('reset-password-link', [AdminPasswordResetController::class, 'showLink'])->name('password.link');
+    Route::get('reset-password/{token}', [AdminPasswordResetController::class, 'createReset'])->name('password.reset');
+    Route::post('reset-password', [AdminPasswordResetController::class, 'reset'])->name('password.update');
+});
+
+Route::middleware(['admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::post('logout', [AdminAuthenticationController::class, 'destroy'])->name('logout');
+    Route::get('profile', [AdminProfileController::class, 'show'])->name('profile');
+    Route::put('profile', [AdminProfileController::class, 'update'])->name('profile.update');
+    Route::get('change-password', [AdminProfileController::class, 'changePassword'])->name('password.edit');
+    Route::post('change-password', [AdminProfileController::class, 'updatePassword'])->name('password.change');
 });
 
 Route::middleware('auth')->group(function () {

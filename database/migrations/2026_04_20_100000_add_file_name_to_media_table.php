@@ -14,7 +14,10 @@ class AddFileNameToMediaTable extends Migration
     public function up()
     {
         Schema::table('media', function (Blueprint $table) {
-            $table->string('file_name')->nullable()->after('blog_id');
+            // Column already exists in the create table migration, so skip
+            if (!Schema::hasColumn('media', 'file_name')) {
+                $table->string('file_name')->nullable()->after('blog_id');
+            }
         });
     }
 
@@ -26,7 +29,9 @@ class AddFileNameToMediaTable extends Migration
     public function down()
     {
         Schema::table('media', function (Blueprint $table) {
-            $table->dropColumn('file_name');
+            if (Schema::hasColumn('media', 'file_name')) {
+                $table->dropColumn('file_name');
+            }
         });
     }
 }

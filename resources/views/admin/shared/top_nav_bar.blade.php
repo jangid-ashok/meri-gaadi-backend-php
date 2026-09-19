@@ -31,7 +31,7 @@
 			</a>
 			<ul class="dropdown-menu dropdown-menu-end">
 			<li>
-				<a class="dropdown-item" href="#">
+				<a class="dropdown-item" href="{{ route('admin.profile') }}">
 				<div class="d-flex">
 					<div class="flex-shrink-0 me-3">
 						<div class="avatar avatar-online">
@@ -49,12 +49,12 @@
 				<div class="dropdown-divider my-1"></div>
 			</li>
 			<li>
-				<a class="dropdown-item" href="#">
+				<a class="dropdown-item" href="{{ route('admin.profile') }}">
 					<i class="icon-base bx bx-user icon-md me-3"></i><span>My Profile</span>
 				</a>
 			</li>
 			<li>
-				<a class="dropdown-item" href="#">
+				<a class="dropdown-item" href="{{ route('admin.password.edit') }}">
 					<i class="icon-base bx bx-cog icon-md me-3"></i><span>Settings</span>
 				</a>
 			</li>
@@ -70,7 +70,7 @@
 				<div class="dropdown-divider my-1"></div>
 			</li>
 			<li>
-			<form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
+				<form id="logout-form" action="{{ route('admin.logout') }}" method="POST" style="display: none;">
 				@csrf
 			</form>
 				<a class="dropdown-item" href="javascript:void(0);" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
