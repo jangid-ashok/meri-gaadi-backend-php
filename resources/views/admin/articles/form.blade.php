@@ -1,0 +1,39 @@
+@extends('admin.layouts.app')
+@section('content')
+@php($currentRole = Auth::user())
+<main class="container-xxl flex-grow-1 container-p-y"><div class="mb-4"><h1 class="h3">{{ $article->exists ? 'Edit article' : 'Add article' }}</h1></div>
+<form id="article-form" method="POST" enctype="multipart/form-data" action="{{ $article->exists ? route('admin.articles.update', $article) : route('admin.articles.store') }}" class="card p-4">@csrf @if($article->exists)@method('PUT')@endif
+    <div class="row g-3"><div class="col-12"><label class="form-label" for="title">Title</label><input class="form-control @error('title') is-invalid @enderror" id="title" name="title" value="{{ old('title', $article->title) }}" required maxlength="255">@error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12"><label class="form-label" for="slug">Slug</label><input class="form-control @error('slug') is-invalid @enderror" id="slug" name="slug" value="{{ old('slug', $article->slug) }}" placeholder="Generated from title when blank">@error('slug')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12"><label class="form-label" for="excerpt">Excerpt</label><textarea class="form-control @error('excerpt') is-invalid @enderror" id="excerpt" name="excerpt" rows="3" maxlength="1000">{{ old('excerpt', $article->excerpt ?? $article->sub_title) }}</textarea>@error('excerpt')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12"><label class="form-label" for="content">Content</label><textarea class="form-control @error('content') is-invalid @enderror" id="content" name="content" rows="12" required>{{ old('content', $article->description) }}</textarea>@error('content')<div class="invalid-feedback">{{ $message }}</div>@enderror<p class="form-text mb-0">Plain text only. HTML will be displayed as text.</p></div>
+    <div class="col-12 col-md-6"><label class="form-label" for="category_id">Category</label><select class="form-select @error('category_id') is-invalid @enderror" id="category_id" name="category_id" required><option value="">Choose category</option>@foreach($categories as $category)<option value="{{ $category->id }}" @selected((string)old('category_id', $article->category_id) === (string)$category->id)>{{ $category->name }}{{ $category->trashed() ? ' (archived)' : ($category->status === 'active' ? '' : ' (inactive)') }}</option>@endforeach</select>@error('category_id')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12 col-md-6"><label class="form-label" for="author_id">Author</label><select class="form-select @error('author_id') is-invalid @enderror" id="author_id" name="author_id" required><option value="">Choose author</option>@foreach($authors as $author)<option value="{{ $author->id }}" @selected((string)old('author_id', $article->user_id ?: Auth::id()) === (string)$author->id)>{{ $author->name }} ({{ $author->email }})</option>@endforeach</select>@error('author_id')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12"><label class="form-label" for="article-tags-trigger">Tags</label><input type="hidden" name="tags_present" value="1">@include('admin.shared.multi-select', ['id'=>'article-tags','name'=>'tags','options'=>$tags->map(fn($tag)=>['value'=>$tag->id,'label'=>$tag->name.($tag->status === 'active' ? '' : ' (inactive)')]),'selected'=>$article->exists ? $article->tags->modelKeys() : [],'placeholder'=>'Select tags...','searchPlaceholder'=>'Search tags...'])<div class="form-text">Create tags in Tags Management.</div></div>
+    <div class="col-12 col-md-6"><label class="form-label" for="status">Status</label>@if(! $currentRole->hasPermission('articles.publish'))@if($article->exists)<input type="hidden" name="status" value="{{ old('status', $article->publication_status ?: 'draft') }}"><input class="form-control" value="{{ ucfirst($article->publication_status ?: 'draft') }}" disabled>@else<select class="form-select @error('status') is-invalid @enderror" id="status" name="status" required>@foreach(['draft', 'inactive'] as $status)<option value="{{ $status }}" @selected(old('status', 'draft') === $status)>{{ ucfirst($status) }}</option>@endforeach</select>@endif<div class="form-text">Publishing status requires publish permission.</div>@else<select class="form-select @error('status') is-invalid @enderror" id="status" name="status" required>@foreach(['draft', 'published', 'inactive'] as $status)<option value="{{ $status }}" @selected(old('status', $article->publication_status ?: 'draft') === $status)>{{ ucfirst($status) }}</option>@endforeach</select>@endif @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12 col-md-6"><label class="form-label" for="published_at">Published date</label><input class="form-control @error('published_at') is-invalid @enderror" id="published_at" name="published_at" type="datetime-local" value="{{ old('published_at', $article->published_at?->format('Y-m-d\\TH:i')) }}">@error('published_at')<div class="invalid-feedback">{{ $message }}</div>@enderror</div>
+    <div class="col-12"><label class="form-label" for="featured_image">Featured image (JPG, PNG, GIF, WebP, or AVIF where supported; maximum {{ number_format(config('media.max_image_kb') / 1024, 1) }} MB)</label><input class="form-control @error('featured_image') is-invalid @enderror" id="featured_image" name="featured_image" type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.avif,image/jpeg,image/png,image/gif,image/webp,image/avif">@error('featured_image')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror<div class="mt-3 d-flex flex-wrap align-items-start gap-3">@if($article->featured_image)<img src="{{ \Illuminate\Support\Facades\Storage::disk('brand_media')->url($article->featured_image) }}" alt="Current featured image" class="img-fluid rounded mb-4" style="max-width:220px;max-height:160px;object-fit:cover">@endif<img id="image-preview" alt="Selected image preview" class="img-fluid rounded d-none" style="max-width:220px;max-height:160px;object-fit:cover"><div class="form-check mt-2"><input class="form-check-input" type="checkbox" value="1" id="clear_featured_image" name="clear_featured_image"><label class="form-check-label" for="clear_featured_image">Remove current image</label></div></div></div>
+    @if(Auth::user()->hasPermission('media.view'))@include('admin.shared.media-picker', ['field' => 'featured_image_media_id'])@endif
+    </div><div class="d-flex flex-wrap gap-2 mt-4"><button id="article-submit" class="btn btn-primary" type="submit">{{ $article->exists ? 'Save changes' : 'Create article' }}</button><a class="btn btn-outline-secondary" href="{{ $article->exists ? route('admin.articles.show', $article) : route('admin.articles.index') }}">Cancel</a></div>
+</form></main>
+<script>
+document.getElementById('featured_image').addEventListener('change', function (event) {
+    const preview = document.getElementById('image-preview');
+    const file = event.target.files && event.target.files[0];
+    if (!file) { preview.classList.add('d-none'); preview.removeAttribute('src'); return; }
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+        event.target.value = '';
+        preview.classList.add('d-none');
+        alert('Choose a JPG, PNG, GIF, WebP or supported AVIF image no larger than 5 MB.');
+        return;
+    }
+    preview.src = URL.createObjectURL(file);
+    preview.classList.remove('d-none');
+});
+document.getElementById('article-form').addEventListener('submit', function () {
+    const button = document.getElementById('article-submit');
+    button.disabled = true;
+    button.textContent = 'Saving…';
+});
+</script>
+@endsection

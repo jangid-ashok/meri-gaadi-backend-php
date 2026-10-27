@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Admin\BlogCategory;
+use App\Models\Media;
+use App\Services\MediaService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -21,39 +23,17 @@ class BlogCategoryController extends Controller {
      *
      * @return \Illuminate\Contracts\View\View
      */
-    public function index() {
-        $data = [];
-        $data['page_title'] = 'Blog Categories';
-        $data['pageType'] = 'list';
-        $data['leftMenuActive'] = 'blog-category';
-        return view('admin.blogCategory.blogCategoriesList', $data);
-    }
-
-    public function getCategoriesList(Request $request) {
-        $data = [];
-        $pageNo = (int) $request->get('page', 1);
-        $keyword = $request->get('keyword');
-        $page_limit = config('constants.PAGE_LIMIT');
-        $query = $this->categoryModel::query();
-        $query->where('is_deleted', 'no');
-        if (!empty($keyword)) {
-            $kw = '%' . $keyword . '%';
-            $query->where(function ($q) use ($kw) {
-                $q->where('title', 'like', $kw)
-                    ->orWhere('sub_title', 'like', $kw)
-                    ->orWhere('slug', 'like', $kw);
+    public function index(Request $request) {
+        $request->validate(['search' => ['nullable', 'string', 'max:255']]);
+        $query = $this->categoryModel::query()->where('is_deleted', 'no')
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $term = '%'.addcslashes(trim($request->input('search')), '%_').'%';
+                $query->where(fn ($q) => $q->where('title', 'like', $term)->orWhere('sub_title', 'like', $term)->orWhere('slug', 'like', $term));
             });
-        }
-        $count = $query->count();
-        // $query->limit($page_limit, ($pageNo - 1) * $page_limit);
-        $categories = $query->latest()->skip(($pageNo - 1) * $page_limit)->take($page_limit)->get();
-        // echo '<pre>';print_r($count);
-        // echo '<pre>';print_r($categories);die;
-        $data['blogCategories'] = $categories;
-        $html = view('admin.blogCategory.getBlogCategoryList', $data)->render();
-        return response()->json([
-            'total_records' => $count,
-            'html' => $html,
+
+        return view('admin.blogCategory.blogCategoriesList', [
+            'blogCategories' => $this->paginateRequest($request, $query->latest()),
+            'page_title' => 'Blog Categories', 'pageType' => 'list', 'leftMenuActive' => 'blog-category',
         ]);
     }
 
@@ -94,7 +74,8 @@ class BlogCategoryController extends Controller {
             ],
             'meta_description' => 'nullable',
             'description' => 'nullable',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,svg,webp',
+            'image' => 'nullable|file|max:'.config('media.max_image_kb', 5120),
+            'image_media_id' => ['nullable', Rule::exists('media', 'id')->where(fn ($query) => $query->where('disk', 'media')->whereNull('blog_id')->whereNotNull('created_by'))],
             'status' => 'in:active,inactive',
         ]);
 
@@ -107,18 +88,15 @@ class BlogCategoryController extends Controller {
             return response()->json($json);
         }
 
-        $customImageName = NULL;
-        if ($request->hasFile('image')) {
-            $image = $request->file('image');
-            $customImageName = time().'-'.uniqid().'.'.$image->getClientOriginalExtension();
-            $destinationPath = public_path(config('constants.BLOG_CATEGORY_IMAGE_PATH'));
+        abort_unless(! $request->filled('image_media_id') || $request->user()->hasPermission('media.view'), 403);
 
-            // Ensure the directory exists
-            if (!file_exists($destinationPath)) {
-                mkdir($destinationPath, 0755, true);
-            }
-            // Move the file manually
-            $image->move($destinationPath, $customImageName);
+        $customImageName = NULL;
+        $uploadedImagePath = null;
+        if ($request->hasFile('image')) {
+            $uploadedImagePath = app(MediaService::class)->store($request->file('image'), (int) $request->user()->id, null, 'media', 'image')->path;
+            $customImageName = $uploadedImagePath;
+        } elseif ($request->filled('image_media_id')) {
+            $customImageName = Media::where('disk', 'media')->findOrFail($request->input('image_media_id'))->path;
         }
 
         try {
@@ -137,6 +115,7 @@ class BlogCategoryController extends Controller {
             $msgClass = 'alert-success';
             $message = 'Blog Category has been added successfully!';
         } catch (\Throwable $e) {
+            if ($uploadedImagePath) app(MediaService::class)->cleanupNewUpload($uploadedImagePath);
             Log::error('BlogCategory Store Error: ' . $e->getMessage());
         }
 
@@ -198,7 +177,8 @@ class BlogCategoryController extends Controller {
             ],
             'meta_description' => 'nullable',
             'description' => 'nullable',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,svg,webp',
+            'image' => 'nullable|file|max:'.config('media.max_image_kb', 5120),
+            'image_media_id' => ['nullable', Rule::exists('media', 'id')->where(fn ($query) => $query->where('disk', 'media')->whereNull('blog_id')->whereNotNull('created_by'))],
             'status' => 'in:active,inactive',
         ]);
 
@@ -211,20 +191,18 @@ class BlogCategoryController extends Controller {
             return response()->json($json);
         }
 
+        abort_unless(! $request->filled('image_media_id') || $request->user()->hasPermission('media.view'), 403);
+
         $CategoryInfo = $this->categoryModel->findOrFail($request->id);
 
         $customImageName = $CategoryInfo->image ?? NULL;
+        $oldImageName = $CategoryInfo->image;
+        $uploadedImagePath = null;
         if ($request->hasFile('image')) {
-            $image = $request->file('image');
-            $customImageName = time() . '-' . uniqid() . '.' . $image->getClientOriginalExtension();
-            $destinationPath = public_path(config('constants.BLOG_CATEGORY_IMAGE_PATH'));
-
-            // Ensure the directory exists
-            if (!file_exists($destinationPath)) {
-                mkdir($destinationPath, 0755, true);
-            }
-            // Move the file manually
-            $image->move($destinationPath, $customImageName);
+            $uploadedImagePath = app(MediaService::class)->store($request->file('image'), (int) $request->user()->id, null, 'media', 'image')->path;
+            $customImageName = $uploadedImagePath;
+        } elseif ($request->filled('image_media_id')) {
+            $customImageName = Media::where('disk', 'media')->findOrFail($request->input('image_media_id'))->path;
         }
 
         try {
@@ -239,11 +217,16 @@ class BlogCategoryController extends Controller {
             $CategoryInfo->image = $customImageName;
             $CategoryInfo->status = $request->status;
             $CategoryInfo->save();
+            if (($request->hasFile('image') || $request->filled('image_media_id')) && $oldImageName) {
+                $oldMedia = Media::where('disk', 'media')->where('path', $oldImageName)->first();
+                if ($oldMedia) app(MediaService::class)->deleteIfUnreferenced($oldMedia);
+            }
 
             $status = true;
             $msgClass = 'alert-success';
             $message = 'Blog Category has been updated successfully!';
         } catch (\Throwable $e) {
+            if ($uploadedImagePath) app(MediaService::class)->cleanupNewUpload($uploadedImagePath);
             Log::error('BlogCategory Update Error: ' . $e->getMessage());
         }
 

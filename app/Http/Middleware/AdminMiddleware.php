@@ -27,6 +27,13 @@ class AdminMiddleware
             abort(403);
         }
 
+        if (Auth::user()->status === 'inactive') {
+            Auth::logout();
+            return $request->expectsJson()
+                ? response()->json(['message' => 'This account is inactive.'], 403)
+                : redirect()->route('admin.login');
+        }
+
         return $next($request);
     }
 }

@@ -6,9 +6,11 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 class Brand extends Model
 {
+    protected $appends = ['logo_url'];
     use HasFactory;
 
     protected $fillable = [
@@ -28,10 +30,17 @@ class Brand extends Model
         'sort_order' => 'integer',
     ];
 
+    public function getLogoUrlAttribute(): ?string
+    {
+        return media_image_url($this->logo, 'brand_media');
+    }
+
     public function carModels(): HasMany
     {
         return $this->hasMany(CarModel::class);
     }
+
+    public function seoMeta(): MorphOne { return $this->morphOne(SeoMeta::class, 'seoable'); }
 
     public function scopeActive(Builder $query): Builder
     {

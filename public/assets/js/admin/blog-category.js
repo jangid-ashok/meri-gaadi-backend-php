@@ -50,55 +50,6 @@ $(document).on('submit', '#blogCategoryForm', function (e) {
     });
 });
 
-/***************** Blog Categories List *****************/
-$(document).ready(() => {
-    if (pageType == 'list') {
-        getBlogCategories();
-    }
-});
-
-$(document).on('click', '.pagination-link', function (e) {
-    e.preventDefault();
-
-    const page = parseInt($(this).data('page'));
-    if (!isNaN(page)) {
-        getBlogCategories(page, $('#category-keyword').val() || '');
-    }
-});
-
-$('#category-search-btn').on('click', function () {
-    getBlogCategories(1, $('#category-keyword').val() || '');
-});
-
-$('#category-search-reset').on('click', function () {
-    $('#category-keyword').val('');
-    getBlogCategories(1, '');
-});
-
-$(document).on('keydown', '#category-keyword', function (e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        getBlogCategories(1, $(this).val() || '');
-    }
-});
-
-function getBlogCategories(pageNo = 1, keyword = '') {
-    $.ajax({
-        type: 'get',
-        url: 'get-blog-categories',
-        data: { page: pageNo, keyword: keyword },
-        dataType: 'json',
-        beforeSend: () => {
-            showTableLoader('#get-category-list');
-        },
-        success: (response) => {
-            $('#get-category-list').html(response.html);
-            $('.pagination-div').html(buildPagination(response.total_records, pageLimit, pageNo));
-        }
-
-    });
-}
-
 $(document).on('click', '.delete-popup-btn', function (e) {
     e.preventDefault();
 

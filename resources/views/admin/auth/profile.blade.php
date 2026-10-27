@@ -9,7 +9,7 @@
         @csrf @method('PUT')
         <div class="col-md-6"><label class="form-label" for="name">Name</label><input class="form-control" id="name" type="text" name="name" value="{{ old('name', $user->name) }}" required></div>
         <div class="col-md-6"><label class="form-label" for="email">Email</label><input class="form-control" id="email" type="email" value="{{ $user->email }}" disabled></div>
-        <div class="col-md-6"><label class="form-label" for="profile_image">Profile image</label><input class="form-control" id="profile_image" type="file" name="profile_image" accept="image/*"></div>
+        <div class="col-md-6"><label class="form-label" for="profile_image">Profile image</label><input class="form-control" id="profile_image" type="file" name="profile_image" accept=".jpg,.jpeg,.png,.gif,.webp,.avif,image/jpeg,image/png,image/gif,image/webp,image/avif"><div class="form-text">JPG, PNG, GIF, WebP, or AVIF where supported.</div></div>
         <div class="col-12"><button class="btn btn-primary" type="submit">Save profile</button></div>
     </form></div></div>
 </main>

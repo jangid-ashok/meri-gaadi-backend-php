@@ -4,6 +4,7 @@ namespace App\Models\Admin;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class BlogMedia extends Model
 {
@@ -58,11 +59,13 @@ class BlogMedia extends Model
 
     public function fullDiskPath(): string
     {
+        if ($this->disk === 'media') return Storage::disk('media')->path($this->path);
         return public_path($this->relativeUrlPath());
     }
 
     public function getUrlAttribute()
     {
+        if ($this->disk === 'media') return Storage::disk('media')->url($this->path);
         return asset($this->relativeUrlPath());
     }
 
@@ -78,6 +81,6 @@ class BlogMedia extends Model
 
     public function displayName()
     {
-        return $this->file_name ?: $this->storedFileName();
+        return $this->original_name ?: ($this->file_name ?: $this->storedFileName());
     }
 }

@@ -8,8 +8,6 @@ use App\Models\FeatureCategory;
 use App\Models\Variant;
 use App\Models\VariantFeature;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class VariantFeatureController extends Controller
@@ -44,12 +42,16 @@ class VariantFeatureController extends Controller
     {
         $payloads = $this->validatedBulk($request);
         $data = $payloads
-            ->map(fn ($payload) => $this->buildPayload($variant, $payload))
+            ->map(fn ($payload) => [
+                'variant_id' => $variant->id,
+                'feature_id' => (int) $payload['feature_id'],
+                'value' => $payload['value'],
+            ])
             ->values()
             ->all();
 
         if ($data === []) {
-            return response()->json(['message' => 'No feature values provided.'], 422);
+            throw ValidationException::withMessages(['features' => 'At least one feature value is required.']);
         }
 
         $rows = [];
@@ -93,13 +95,15 @@ class VariantFeatureController extends Controller
     private function validatedBulk(Request $request): \Illuminate\Support\Collection
     {
         $payloads = $request->all();
-        if (! is_array($payloads)) {
+        if (! is_array($payloads) || ! array_is_list($payloads)) {
             throw ValidationException::withMessages(['features' => 'Feature values must be provided as a list.']);
         }
+        if ($payloads === [] || count($payloads) > 100) throw ValidationException::withMessages(['features' => 'Provide between 1 and 100 feature values.']);
 
         $rules = [];
         foreach ($payloads as $index => $entry) {
-            $rules[$index . '.feature_id'] = ['required', 'integer', Rule::exists('features', 'id')];
+            $rules[$index] = ['required', 'array'];
+            $rules[$index . '.feature_id'] = ['required', 'integer'];
             $rules[$index . '.value'] = ['required', 'string', 'max:255'];
         }
 
@@ -108,44 +112,26 @@ class VariantFeatureController extends Controller
             throw new \Illuminate\Validation\ValidationException($validator);
         }
 
+        $ids = collect($payloads)->pluck('feature_id')->map(fn ($id) => (int) $id);
+        $definitions = Feature::with('category')->whereIn('id', $ids)->get()->keyBy('id');
         $features = collect($payloads);
         $seen = [];
         foreach ($features as $index => $entry) {
-            $feature = Feature::with('category')->findOrFail($entry['feature_id']);
-            $this->assertValidValue($feature, $entry['value'], $index);
-
             $key = (int) $entry['feature_id'];
+            $feature = $definitions->get($key);
+            if (! $feature) throw ValidationException::withMessages([$index.'.feature_id' => 'The selected feature does not exist.']);
+            $normalized = $this->normalizeValue($feature, $entry['value'], true);
+            if ($normalized === null) throw ValidationException::withMessages([$index.'.value' => 'The feature value is invalid.']);
             if (isset($seen[$key])) {
                 throw ValidationException::withMessages([
                     $index . '.feature_id' => 'Duplicate feature selected for this variant.',
                 ]);
             }
             $seen[$key] = true;
+            $payloads[$index]['value'] = $normalized;
         }
 
-        return $features;
-    }
-
-    private function buildPayload(Variant $variant, array $payload): array
-    {
-        $feature = Feature::with('category')->findOrFail($payload['feature_id']);
-        $value = $this->normalizeValue($feature, $payload['value']);
-
-        return [
-            'variant_id' => $variant->id,
-            'feature_id' => $feature->id,
-            'value' => $value,
-        ];
-    }
-
-    private function assertValidValue(Feature $feature, $value, int $index): void
-    {
-        $normalized = $this->normalizeValue($feature, $value, true);
-        if ($normalized === null) {
-            throw ValidationException::withMessages([
-                $index . '.value' => 'The feature value is invalid.',
-            ]);
-        }
+        return collect($payloads);
     }
 
     private function validateSingleValue(array $payload, int $featureId, ?string $existing = null): string

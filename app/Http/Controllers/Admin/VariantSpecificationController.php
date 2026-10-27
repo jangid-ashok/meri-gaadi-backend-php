@@ -8,8 +8,6 @@ use App\Models\SpecificationDefinition;
 use App\Models\Variant;
 use App\Models\VariantSpecification;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class VariantSpecificationController extends Controller
@@ -44,12 +42,16 @@ class VariantSpecificationController extends Controller
     {
         $payloads = $this->validatedBulk($request);
         $data = $payloads
-            ->map(fn ($payload) => $this->buildPayload($variant, $payload))
+            ->map(fn ($payload) => [
+                'variant_id' => $variant->id,
+                'specification_definition_id' => (int) $payload['specification_definition_id'],
+                'value' => $payload['value'],
+            ])
             ->values()
             ->all();
 
         if ($data === []) {
-            return response()->json(['message' => 'No specification values provided.'], 422);
+            throw ValidationException::withMessages(['specifications' => 'At least one specification value is required.']);
         }
 
         $rows = [];
@@ -93,14 +95,16 @@ class VariantSpecificationController extends Controller
     private function validatedBulk(Request $request): \Illuminate\Support\Collection
     {
         $payloads = $request->all();
-        if (! is_array($payloads)) {
+        if (! is_array($payloads) || ! array_is_list($payloads)) {
             throw ValidationException::withMessages(['specifications' => 'Specification values must be provided as a list.']);
         }
+        if ($payloads === [] || count($payloads) > 100) throw ValidationException::withMessages(['specifications' => 'Provide between 1 and 100 specification values.']);
 
         $rules = [];
         foreach ($payloads as $index => $entry) {
-            $rules[$index . '.specification_definition_id'] = ['required', 'integer', Rule::exists('specification_definitions', 'id')];
-            $rules[$index . '.value'] = ['required', 'string', 'max:255'];
+            $rules[$index] = ['required', 'array'];
+            $rules[$index.'.specification_definition_id'] = ['required', 'integer'];
+            $rules[$index.'.value'] = ['required', 'string', 'max:255'];
         }
 
         $validator = \Illuminate\Support\Facades\Validator::make($payloads, $rules);
@@ -108,44 +112,26 @@ class VariantSpecificationController extends Controller
             throw new \Illuminate\Validation\ValidationException($validator);
         }
 
+        $ids = collect($payloads)->pluck('specification_definition_id')->map(fn ($id) => (int) $id);
+        $definitions = SpecificationDefinition::with('category')->whereIn('id', $ids)->get()->keyBy('id');
         $specs = collect($payloads);
         $seen = [];
         foreach ($specs as $index => $entry) {
-            $definition = SpecificationDefinition::with('category')->findOrFail($entry['specification_definition_id']);
-            $this->assertValidValue($definition, $entry['value'], $index);
-
             $key = (int) $entry['specification_definition_id'];
+            $definition = $definitions->get($key);
+            if (! $definition) throw ValidationException::withMessages([$index.'.specification_definition_id' => 'The selected specification does not exist.']);
+            $normalized = $this->normalizeValue($definition, $entry['value'], true);
+            if ($normalized === null) throw ValidationException::withMessages([$index.'.value' => 'The specification value is invalid for its data type.']);
             if (isset($seen[$key])) {
                 throw ValidationException::withMessages([
-                    $index . '.specification_definition_id' => 'Duplicate specification definition selected for this variant.',
+                    $index.'.specification_definition_id' => 'Duplicate specification definition selected for this variant.',
                 ]);
             }
             $seen[$key] = true;
+            $payloads[$index]['value'] = $normalized;
         }
 
-        return $specs;
-    }
-
-    private function buildPayload(Variant $variant, array $payload): array
-    {
-        $definition = SpecificationDefinition::with('category')->findOrFail($payload['specification_definition_id']);
-        $value = $this->normalizeValue($definition, $payload['value']);
-
-        return [
-            'variant_id' => $variant->id,
-            'specification_definition_id' => $definition->id,
-            'value' => $value,
-        ];
-    }
-
-    private function assertValidValue(SpecificationDefinition $definition, $value, int $index): void
-    {
-        $normalized = $this->normalizeValue($definition, $value, true);
-        if ($normalized === null) {
-            throw ValidationException::withMessages([
-                $index . '.value' => 'The specification value is invalid for its data type.',
-            ]);
-        }
+        return collect($payloads);
     }
 
     private function validateSingleValue(array $payload, int $definitionId, ?string $existing = null): string

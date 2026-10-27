@@ -7,12 +7,13 @@ use App\Models\Permission;
 use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use App\Services\AuditLogger;
 
 class RoleController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $roles = Role::withCount(['users', 'permissions'])->latest()->paginate(15);
+        $roles = $this->paginateRequest($request, Role::withCount(['users', 'permissions'])->latest());
         return view('admin.roles.index', compact('roles'));
     }
 
@@ -27,6 +28,7 @@ class RoleController extends Controller
         $this->guardPermissionSet($request, $data['permissions'] ?? []);
         $role = Role::create($data);
         $role->permissions()->sync($request->input('permissions', []));
+        app(AuditLogger::class)->record('permission_changed', 'Role', 'Assigned permissions to role "'.$role->name.'"', $role, [], ['permissions' => $role->permissions()->pluck('slug')->all()]);
 
         return redirect()->route('admin.roles.show', $role)->with('status', 'Role created successfully.');
     }
@@ -47,8 +49,12 @@ class RoleController extends Controller
         $this->guardSystemRole($role);
         $data = $this->validated($request, $role);
         $this->guardPermissionSet($request, $data['permissions'] ?? []);
+        $oldPermissions = $role->permissions()->pluck('slug')->all();
         $role->update($data);
-        $role->permissions()->sync($request->input('permissions', []));
+        $sync = $role->permissions()->sync($request->input('permissions', []));
+        if ($sync['attached'] || $sync['detached']) {
+            app(AuditLogger::class)->record('permission_changed', 'Role', 'Changed permissions for role "'.$role->name.'"', $role, ['permissions' => $oldPermissions], ['permissions' => $role->permissions()->pluck('slug')->all()]);
+        }
 
         return redirect()->route('admin.roles.show', $role)->with('status', 'Role updated successfully.');
     }

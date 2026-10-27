@@ -80,12 +80,15 @@
 											<div class="row mb-6">
 												<label class="col-sm-2 col-form-label" for="description">Category Image</label>
 												<div class="col-sm-10">
-													<input class="form-control" name="image" type="file" id="formFile">
-													@if(isset($categoryInfo) && isset($categoryInfo->image) && !empty($categoryInfo->image))
+														<input class="form-control" name="image" type="file" id="formFile" accept=".jpg,.jpeg,.png,.gif,.webp,.avif,image/jpeg,image/png,image/gif,image/webp,image/avif">
+								@if(isset($categoryInfo) && isset($categoryInfo->image) && !empty($categoryInfo->image))
 														<div class="added-image-div p-5">
-															<img src="{{ url(config('constants.BLOG_CATEGORY_IMAGE_PATH') . '/' . optional($categoryInfo->image)) }}" width="200" height="150" alt="{{ isset($categoryInfo) ? optional($categoryInfo->image) : '' }}"/>
+															<img src="{{ media_image_url(optional($categoryInfo->image), 'blog_category_media') }}" width="200" height="150" alt="{{ isset($categoryInfo) ? optional($categoryInfo->image) : '' }}"/>
 														</div>
-													@endif
+								@endif
+								@if(Auth::user()->hasPermission('media.view'))
+									@include('admin.shared.media-picker', ['field' => 'image_media_id'])
+								@endif
 												</div>
 											</div>
 											<div class="row mb-6">

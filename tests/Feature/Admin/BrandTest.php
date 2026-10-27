@@ -62,14 +62,14 @@ class BrandTest extends TestCase
 
     public function test_logo_is_stored_and_brand_can_be_updated_and_deleted(): void
     {
-        Storage::fake('brand_media');
+        Storage::fake('media');
         $admin = $this->adminWithPermissions('brands.create', 'brands.update', 'brands.delete');
         $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
         $response = $this->actingAs($admin)->post('/api/admin/brands', array_merge($this->brandData(), ['logo' => UploadedFile::fake()->createWithContent('logo.png', $png)]), ['Accept' => 'application/json']);
         $response->assertCreated();
         $brand = $response->json('data');
         $model = Brand::findOrFail($brand['id']);
-        Storage::disk('brand_media')->assertExists($model->logo);
+        Storage::disk('media')->assertExists($model->logo);
 
         $this->actingAs($admin)->putJson('/api/admin/brands/'.$model->id, ['name' => 'Maruti Suzuki Updated', 'status' => 'inactive'])->assertOk();
         $this->assertDatabaseHas('brands', ['id' => $model->id, 'name' => 'Maruti Suzuki Updated', 'slug' => 'maruti-suzuki-updated']);
@@ -77,21 +77,24 @@ class BrandTest extends TestCase
         $this->assertDatabaseMissing('brands', ['id' => $model->id]);
     }
 
-    public function test_svg_logo_is_accepted_and_edit_replacement_is_multipart_safe(): void
+    public function test_svg_logo_is_rejected_and_edit_replacement_is_multipart_safe(): void
     {
-        Storage::fake('brand_media');
+        Storage::fake('media');
         $admin = $this->adminWithPermissions('brands.create', 'brands.update');
         $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="red"/></svg>';
 
-        $created = $this->actingAs($admin)->post('/api/admin/brands', array_merge($this->brandData(), [
+        $this->actingAs($admin)->post('/api/admin/brands', array_merge($this->brandData(), [
             'name' => 'SVG Motors',
             'logo' => UploadedFile::fake()->createWithContent('logo.svg', $svg),
-        ]), ['Accept' => 'application/json']);
-        $created->assertCreated();
+        ]), ['Accept' => 'application/json'])->assertUnprocessable();
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+        $created = $this->actingAs($admin)->post('/api/admin/brands', array_merge($this->brandData(), [
+            'name' => 'SVG Motors',
+            'logo' => UploadedFile::fake()->createWithContent('logo.png', $png),
+        ]), ['Accept' => 'application/json'])->assertCreated();
         $brand = Brand::findOrFail($created->json('data.id'));
         $oldLogo = $brand->logo;
 
-        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
         $updated = $this->actingAs($admin)->post('/api/admin/brands/'.$brand->id, [
             '_method' => 'PUT',
             'name' => 'SVG Motors',
@@ -102,8 +105,8 @@ class BrandTest extends TestCase
         $brand->refresh();
 
         $this->assertNotSame($oldLogo, $brand->logo);
-        Storage::disk('brand_media')->assertMissing($oldLogo);
-        Storage::disk('brand_media')->assertExists($brand->logo);
+        Storage::disk('media')->assertMissing($oldLogo);
+        Storage::disk('media')->assertExists($brand->logo);
     }
 
     public function test_search_status_filter_and_pagination_work(): void
@@ -115,6 +118,37 @@ class BrandTest extends TestCase
 
         $this->actingAs($admin)->getJson('/api/admin/brands?search=Brand%201&status=inactive')->assertOk()->assertJsonPath('data.total', 1);
         $this->actingAs($admin)->getJson('/api/admin/brands')->assertOk()->assertJsonPath('data.per_page', 15)->assertJsonPath('data.last_page', 2);
+        $this->actingAs($admin)->getJson('/api/admin/brands?page=2&per_page=10')->assertOk()
+            ->assertJsonPath('data.current_page', 2)
+            ->assertJsonPath('data.per_page', 10)
+            ->assertJsonPath('data.from', 11)
+            ->assertJsonPath('data.to', 16);
+    }
+
+    public function test_out_of_range_page_is_clamped_to_the_last_available_page(): void
+    {
+        $admin = $this->adminWithPermissions('brands.view');
+        foreach (range(1, 16) as $number) {
+            Brand::create(['name' => 'Paged Brand '.$number, 'slug' => 'paged-brand-'.$number, 'status' => 'active']);
+        }
+
+        $this->actingAs($admin)->getJson('/api/admin/brands?page=99&per_page=10')
+            ->assertOk()
+            ->assertJsonPath('data.current_page', 2)
+            ->assertJsonPath('data.last_page', 2)
+            ->assertJsonPath('data.from', 11)
+            ->assertJsonPath('data.to', 16);
+    }
+
+    public function test_out_of_range_page_with_no_results_is_reset_to_page_one(): void
+    {
+        $admin = $this->adminWithPermissions('brands.view');
+
+        $this->actingAs($admin)->getJson('/api/admin/brands?page=99&search=missing')
+            ->assertOk()
+            ->assertJsonPath('data.current_page', 1)
+            ->assertJsonPath('data.last_page', 1)
+            ->assertJsonPath('data.total', 0);
     }
 
     private function adminWithPermissions(string ...$slugs): User

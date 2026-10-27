@@ -26,6 +26,7 @@ class AdminLoginRequest extends FormRequest
     {
         $credentials = $this->only('email', 'password');
         $credentials['is_admin'] = true;
+        $credentials['status'] = 'active';
 
         if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             throw ValidationException::withMessages([

@@ -56,6 +56,20 @@ return [
             'visibility' => 'public',
         ],
 
+        'media' => [
+            'driver' => 'local',
+            'root' => public_path('assets/media'),
+            'url' => env('APP_URL').'/assets/media',
+            'visibility' => 'public',
+        ],
+
+        'blog_category_media' => [
+            'driver' => 'local',
+            'root' => public_path('assets/images/blog-categories'),
+            'url' => env('APP_URL').'/assets/images/blog-categories',
+            'visibility' => 'public',
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

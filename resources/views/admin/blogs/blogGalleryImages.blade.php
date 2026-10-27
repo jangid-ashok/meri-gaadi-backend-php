@@ -47,7 +47,7 @@
 										<div class="col-12 mb-4">
                                             <div class="card border border-2 border-dashed">
                                                 <div class="card-body">
-                                                    <input type="file" id="blogGalleryInput" class="d-none" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/ogg,video/quicktime" multiple>
+                                                    <input type="file" id="blogGalleryInput" class="d-none" accept="image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,video/webm,video/ogg,video/quicktime" multiple>
                                                     <label for="blogGalleryInput" id="blogGalleryDropzone" class="d-flex align-items-center justify-content-center rounded p-4 cursor-pointer mb-0" style="min-height: 200px;">
                                                         <div class="text-center">
                                                             <i class="bx bx-cloud-upload fs-1 mb-2 text-muted"></i>

@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\Admin\BlogCategory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -75,6 +76,55 @@ class RbacTest extends TestCase
 
         $this->actingAs($admin)->putJson('/api/admin/admins/'.$target->id.'/roles', ['roles' => [$role->id]])
             ->assertForbidden();
+    }
+
+    public function test_role_assignment_cannot_remove_the_last_active_super_admin(): void
+    {
+        [$admin] = $this->adminWithPermission('roles.assign');
+        $target = User::factory()->create(['is_admin' => true, 'status' => 'active']);
+        $superAdmin = Role::create(['name' => 'Super Admin', 'slug' => 'super-admin', 'is_system' => true]);
+        $target->roles()->attach($superAdmin);
+        $replacement = Role::create(['name' => 'Editor', 'slug' => 'editor']);
+
+        $this->actingAs($admin)->putJson('/api/admin/admins/'.$target->id.'/roles', ['roles' => [$replacement->id]])
+            ->assertStatus(409);
+
+        $this->assertDatabaseHas('role_user', ['user_id' => $target->id, 'role_id' => $superAdmin->id]);
+    }
+
+    public function test_user_without_article_permissions_cannot_manage_blog_categories(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin)->get('/admin/blog-categories')->assertForbidden();
+        $this->actingAs($admin)->post('/admin/blog-categories/delete', ['id' => 1])->assertForbidden();
+    }
+
+    public function test_legacy_blog_routes_enforce_create_update_delete_and_publish_permissions(): void
+    {
+        [$creator] = $this->adminWithPermission('articles.create');
+        $category = BlogCategory::create(['title' => 'Guides', 'slug' => 'guides']);
+        $payload = [
+            'category_ids' => $category->id,
+            'title' => 'Draft article',
+            'sub_title' => 'A draft',
+            'slug' => 'draft-article',
+            'status' => 'inactive',
+        ];
+
+        $this->actingAs($creator)->postJson('/admin/blog/store', $payload)->assertOk()->assertJsonPath('success', true);
+        $articleId = \App\Models\Admin\Blogs::where('slug', 'draft-article')->value('id');
+        $this->assertNotNull($articleId);
+
+        $this->actingAs($creator)->postJson('/admin/blog/store', array_merge($payload, ['title' => 'Published article', 'slug' => 'published-article', 'status' => 'active']))
+            ->assertForbidden();
+        $this->actingAs($creator)->postJson('/admin/blog/update', array_merge($payload, ['id' => $articleId]))
+            ->assertForbidden();
+        $this->actingAs($creator)->postJson('/admin/blog/delete', ['record_id' => $articleId])
+            ->assertForbidden();
+
+        [$publisher] = $this->adminWithPermission('articles.publish');
+        $this->actingAs($publisher)->postJson('/admin/blog/store', $payload)->assertForbidden();
     }
 
     public function test_system_roles_cannot_be_deleted_or_modified(): void

@@ -7,8 +7,17 @@ return [
     'BLOG_CATEGORY_IMAGE_PATH' => 'assets/images/blog-categories',
     // Public path segment for blog gallery files; DB stores filename only (see BlogMedia).
     'BLOG_GALLERY_MEDIA_PATH' => 'assets/media/blogs',
-    // 'BLOG_GALLERY_MAX_FILE_KB' => 51200,
-    'PAGE_LIMIT' => 2
+    'CATEGORY_TYPES' => [
+        'automotive' => 'Automotive',
+        'content' => 'Content',
+    ],
+    'CAR_USE_CASES' => [
+        'first-car' => 'My first car',
+        'family' => 'Family life',
+        'city' => 'City driving',
+        'road-trips' => 'Long road trips',
+        'electric' => 'Going electric',
+        'driving-fun' => 'Driving for fun',
+    ],
+    // Gallery file limits are configured in config/media.php.
 ];
-
-

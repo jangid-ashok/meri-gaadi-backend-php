@@ -14,6 +14,17 @@ use App\Http\Controllers\Admin\VariantSpecificationController;
 use App\Http\Controllers\Admin\FeatureCategoryController;
 use App\Http\Controllers\Admin\FeatureController;
 use App\Http\Controllers\Admin\VariantFeatureController;
+use App\Http\Controllers\Admin\CategoryController;
+use App\Http\Controllers\Admin\TagController;
+use App\Http\Controllers\Admin\FaqController;
+use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\ArticleController;
+use App\Http\Controllers\Admin\HomepageController;
+use App\Http\Controllers\Admin\FeaturedContentController;
+use App\Http\Controllers\Admin\SeoController;
+use App\Http\Controllers\Admin\MediaController;
+use App\Http\Controllers\Admin\AuditLogController;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,6 +46,30 @@ Route::get('/dashboard', function () {
 })->middleware(['auth'])->name('dashboard');
 
 Route::prefix('admin')->name('admin.')->middleware(['admin'])->group(function () {
+    Route::middleware('permission:audit_logs.view')->group(function () {
+        Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+        Route::get('audit-logs/{auditLog}', [AuditLogController::class, 'show'])->name('audit-logs.show');
+    });
+    Route::middleware('permission:seo.view')->get('seo', [SeoController::class, 'index'])->name('seo.index');
+    Route::middleware('permission:seo.create')->get('seo/create', [SeoController::class, 'create'])->name('seo.create');
+    Route::middleware('permission:seo.create')->post('seo', [SeoController::class, 'store'])->name('seo.store');
+    Route::middleware('permission:seo.update')->get('seo/{seo}/edit', [SeoController::class, 'edit'])->name('seo.edit');
+    Route::middleware('permission:seo.update')->put('seo/{seo}', [SeoController::class, 'update'])->name('seo.update');
+    Route::middleware('permission:seo.delete')->delete('seo/{seo}', [SeoController::class, 'destroy'])->name('seo.destroy');
+    Route::middleware('permission:featured_content.view')->get('featured-content', [FeaturedContentController::class, 'index'])->name('featured-content.index');
+    Route::middleware('permission:featured_content.create')->group(function () {
+        Route::get('featured-content/create', [FeaturedContentController::class, 'create'])->name('featured-content.create');
+        Route::post('featured-content', [FeaturedContentController::class, 'store'])->name('featured-content.store');
+    });
+    Route::middleware('permission:featured_content.update')->group(function () {
+        Route::get('featured-content/{featuredContent}/edit', [FeaturedContentController::class, 'edit'])->name('featured-content.edit');
+        Route::put('featured-content/{featuredContent}', [FeaturedContentController::class, 'update'])->name('featured-content.update');
+    });
+    Route::middleware('permission:featured_content.delete')->delete('featured-content/{featuredContent}', [FeaturedContentController::class, 'destroy'])->name('featured-content.destroy');
+    Route::middleware('permission:homepage.view')->get('homepage', [HomepageController::class, 'index'])->name('homepage.index');
+    Route::middleware('permission:homepage.update')->put('homepage', [HomepageController::class, 'update'])->name('homepage.update');
+
+    Route::middleware('permission:media.view')->get('media', [MediaController::class, 'library'])->name('media.index');
 
     // Admin Dashboard
     Route::middleware('permission:dashboard.view')->group(function () {
@@ -42,6 +77,32 @@ Route::prefix('admin')->name('admin.')->middleware(['admin'])->group(function ()
         Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     });
     Route::get('403', fn () => view('admin.forbidden'))->name('forbidden');
+
+    Route::middleware('permission:articles.view')->group(function () {
+        Route::get('articles', [ArticleController::class, 'index'])->name('articles.index');
+    });
+    Route::middleware('permission:articles.create')->get('articles/create', [ArticleController::class, 'create'])->name('articles.create');
+    Route::middleware('permission:articles.create')->post('articles', [ArticleController::class, 'store'])->name('articles.store');
+    Route::middleware('permission:articles.update')->group(function () {
+        Route::get('articles/{article}/edit', [ArticleController::class, 'edit'])->name('articles.edit');
+        Route::put('articles/{article}', [ArticleController::class, 'update'])->name('articles.update');
+    });
+    Route::middleware('permission:articles.view')->get('articles/{article}', [ArticleController::class, 'show'])->name('articles.show');
+    Route::middleware('permission:articles.publish')->patch('articles/{article}/status', [ArticleController::class, 'status'])->name('articles.status');
+    Route::middleware('permission:articles.delete')->delete('articles/{article}', [ArticleController::class, 'destroy'])->name('articles.destroy');
+
+    Route::middleware('permission:users.view')->group(function () {
+        Route::get('users', [UserController::class, 'index'])->name('users.index');
+    });
+    Route::middleware('permission:users.create')->get('users/create', [UserController::class, 'create'])->name('users.create');
+    Route::middleware('permission:users.create')->post('users', [UserController::class, 'store'])->name('users.store');
+    Route::middleware('permission:users.update')->group(function () {
+        Route::get('users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+        Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
+    });
+    Route::middleware('permission:users.view')->get('users/{user}', [UserController::class, 'show'])->name('users.show');
+    Route::middleware('permission:users.status')->patch('users/{user}/status', [UserController::class, 'status'])->name('users.status');
+    Route::middleware('permission:users.delete')->delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
 
     Route::middleware('permission:roles.view')->group(function () {
         Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
@@ -128,33 +189,66 @@ Route::prefix('admin')->name('admin.')->middleware(['admin'])->group(function ()
     Route::middleware('permission:features.update')->put('features/{feature}', [FeatureController::class, 'update'])->name('features.update');
     Route::middleware('permission:features.delete')->delete('features/{feature}', [FeatureController::class, 'destroy'])->name('features.destroy');
 
-    // Blog Categories Routes Start
-    // List all categories
-    Route::get('blog-categories', [BlogCategoryController::class, 'index'])->name('blog-categories.index');
-    Route::get('get-blog-categories', [BlogCategoryController::class, 'getCategoriesList']);
-    // Show add form
-    Route::get('blog-categories/create', [BlogCategoryController::class, 'create'])->name('blog-categories.create');
-    // Handle add form submission
-    Route::post('blog-categories/store', [BlogCategoryController::class, 'store'])->name('blog-categories.store');
-    // Show edit form
-    Route::get('blog-categories/edit/{id}', [BlogCategoryController::class, 'edit'])->name('blog-categories.edit');
-    // Handle update form submission
-    Route::post('blog-categories/update', [BlogCategoryController::class, 'update'])->name('blog-categories.update');
-    Route::post('blog-categories/delete', [BlogCategoryController::class, 'destroy'])->name('blog-categories.delete');
-    // Blog Categories Routes end
+    Route::middleware('permission:categories.create')->get('categories/create', [CategoryController::class, 'create'])->name('categories.create');
+    Route::middleware('permission:categories.view')->group(function () {
+        Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+        Route::get('categories/{category}/edit', [CategoryController::class, 'edit'])->middleware('permission:categories.update')->name('categories.edit');
+        Route::get('categories/{category}', [CategoryController::class, 'show'])->name('categories.show');
+    });
+    Route::middleware('permission:categories.create')->post('categories', [CategoryController::class, 'store'])->name('categories.store');
+    Route::middleware('permission:categories.update')->put('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+    Route::middleware('permission:categories.delete')->delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+    Route::middleware('permission:tags.create')->get('tags/create', [TagController::class, 'create'])->name('tags.create');
+    Route::middleware('permission:tags.view')->group(function () {
+        Route::get('tags', [TagController::class, 'index'])->name('tags.index');
+        Route::get('tags/{tag}/edit', [TagController::class, 'edit'])->middleware('permission:tags.update')->name('tags.edit');
+        Route::get('tags/{tag}', [TagController::class, 'show'])->name('tags.show');
+    });
+    Route::middleware('permission:tags.create')->post('tags', [TagController::class, 'store'])->name('tags.store');
+    Route::middleware('permission:tags.update')->put('tags/{tag}', [TagController::class, 'update'])->name('tags.update');
+    Route::middleware('permission:tags.delete')->delete('tags/{tag}', [TagController::class, 'destroy'])->name('tags.destroy');
+
+    Route::middleware('permission:settings.view')->group(function () {
+        Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
+    });
+    Route::middleware('permission:settings.update')->put('settings', [SettingController::class, 'update'])->name('settings.update');
+
+    Route::middleware('permission:faqs.create')->get('faqs/create', [FaqController::class, 'create'])->name('faqs.create');
+    Route::middleware('permission:faqs.view')->group(function () {
+        Route::get('faqs', [FaqController::class, 'index'])->name('faqs.index');
+        Route::get('faqs/{faq}/edit', [FaqController::class, 'edit'])->middleware('permission:faqs.update')->name('faqs.edit');
+        Route::get('faqs/{faq}', [FaqController::class, 'show'])->name('faqs.show');
+    });
+    Route::middleware('permission:faqs.create')->post('faqs', [FaqController::class, 'store'])->name('faqs.store');
+    Route::middleware('permission:faqs.update')->put('faqs/{faq}', [FaqController::class, 'update'])->name('faqs.update');
+    Route::middleware('permission:faqs.delete')->delete('faqs/{faq}', [FaqController::class, 'destroy'])->name('faqs.destroy');
+
+    // Blog categories are part of article management and use the same permissions.
+    Route::middleware('permission:articles.view')->group(function () {
+        Route::get('blog-categories', [BlogCategoryController::class, 'index'])->name('blog-categories.index');
+        Route::get('blog-categories/edit/{id}', [BlogCategoryController::class, 'edit'])->middleware('permission:articles.update')->name('blog-categories.edit');
+    });
+    Route::middleware('permission:articles.create')->get('blog-categories/create', [BlogCategoryController::class, 'create'])->name('blog-categories.create');
+    Route::middleware('permission:articles.create')->post('blog-categories/store', [BlogCategoryController::class, 'store'])->name('blog-categories.store');
+    Route::middleware('permission:articles.update')->post('blog-categories/update', [BlogCategoryController::class, 'update'])->name('blog-categories.update');
+    Route::middleware('permission:articles.delete')->post('blog-categories/delete', [BlogCategoryController::class, 'destroy'])->name('blog-categories.delete');
 
     // Blogs Routes Start
-    Route::get('blogs', [BlogController::class, 'index']);
-    Route::get('get-blogs', [BlogController::class, 'getBlogsList']);
-    Route::get('blog/create', [BlogController::class, 'create']);
-    Route::post('blog/store', [BlogController::class, 'store'])->name('blog.store');
-    Route::get('blog/edit/{id}', [BlogController::class, 'edit'])->name('blog.edit');
-    Route::post('blog/update', [BlogController::class, 'update'])->name('blog.update');
-    Route::post('blog/delete', [BlogController::class, 'destroy'])->name('blog.delete');
-    Route::get('blog/gallery/{id}', [BlogController::class, 'galleryImages'])->name('blog.gallery');
-    Route::get('blog/gallery/{id}/media', [BlogController::class, 'getGalleryMediaList']);
-    Route::post('blog/gallery/{id}/upload', [BlogController::class, 'uploadGalleryMedia'])->name('blog.gallery.upload');
-    Route::post('blog/gallery/media/delete', [BlogController::class, 'deleteGalleryMedia'])->name('blog.gallery.delete');
+    Route::middleware('permission:articles.view')->group(function () {
+        Route::get('blogs', [BlogController::class, 'index']);
+        Route::get('blog/edit/{id}', [BlogController::class, 'edit'])->name('blog.edit');
+        Route::get('blog/gallery/{id}', [BlogController::class, 'galleryImages'])->name('blog.gallery');
+        Route::get('blog/gallery/{id}/media', [BlogController::class, 'getGalleryMediaList']);
+    });
+    Route::middleware('permission:articles.create')->get('blog/create', [BlogController::class, 'create']);
+    Route::middleware('permission:articles.create')->post('blog/store', [BlogController::class, 'store'])->name('blog.store');
+    Route::middleware('permission:articles.update')->group(function () {
+        Route::post('blog/update', [BlogController::class, 'update'])->name('blog.update');
+        Route::post('blog/gallery/{id}/upload', [BlogController::class, 'uploadGalleryMedia'])->name('blog.gallery.upload');
+        Route::post('blog/gallery/media/delete', [BlogController::class, 'deleteGalleryMedia'])->name('blog.gallery.delete');
+    });
+    Route::middleware('permission:articles.delete')->post('blog/delete', [BlogController::class, 'destroy'])->name('blog.delete');
 });
 
 

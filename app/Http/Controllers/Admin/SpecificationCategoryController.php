@@ -12,7 +12,7 @@ class SpecificationCategoryController extends Controller
 {
     public function index(Request $request)
     {
-        $categories = $this->query($request)->paginate(15)->withQueryString();
+        $categories = $this->paginateRequest($request, $this->query($request));
 
         if ($request->expectsJson()) {
             return response()->json(['data' => $categories]);

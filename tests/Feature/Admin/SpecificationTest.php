@@ -122,6 +122,7 @@ class SpecificationTest extends TestCase
             'status' => 'active',
         ]);
 
+        $this->actingAs($admin)->postJson('/api/admin/variants/'.$variant->id.'/specifications', [])->assertUnprocessable()->assertJsonValidationErrors(['specifications']);
         $this->actingAs($admin)->postJson('/api/admin/variants/'.$variant->id.'/specifications', [[
             'specification_definition_id' => $numberDefinition->id,
             'value' => '4',

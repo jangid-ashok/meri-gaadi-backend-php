@@ -29,7 +29,7 @@
                         <td>{{ $brand->sort_order }}</td><td>{{ $brand->created_at?->format('d M Y') }}</td>
                         <td class="text-end text-nowrap"><a class="btn btn-sm btn-icon btn-outline-secondary" href="{{ route('admin.brands.show', $brand) }}" title="View {{ $brand->name }}" aria-label="View {{ $brand->name }}"><i class="bx bx-show"></i></a>
                             @if (Auth::user()->hasPermission('brands.update'))<a class="btn btn-sm btn-icon btn-outline-primary ms-1" href="{{ route('admin.brands.edit', $brand) }}" title="Edit {{ $brand->name }}" aria-label="Edit {{ $brand->name }}"><i class="bx bx-edit"></i></a>@endif
-                            @if (Auth::user()->hasPermission('brands.delete'))<form class="d-inline" method="POST" action="{{ route('admin.brands.destroy', $brand) }}" onsubmit="return confirm('Delete {{ addslashes($brand->name) }}?')">@csrf @method('DELETE')<button class="btn btn-sm btn-icon btn-outline-danger ms-1" type="submit" title="Delete {{ $brand->name }}" aria-label="Delete {{ $brand->name }}"><i class="bx bx-trash"></i></button></form>@endif
+                            @if (Auth::user()->hasPermission('brands.delete'))<form class="d-inline" method="POST" action="{{ route('admin.brands.destroy', $brand) }}" data-confirm="Delete {{ $brand->name }}?">@csrf @method('DELETE')<button class="btn btn-sm btn-icon btn-outline-danger ms-1" type="submit" title="Delete {{ $brand->name }}" aria-label="Delete {{ $brand->name }}"><i class="bx bx-trash"></i></button></form>@endif
                         </td>
                     </tr>
                 @empty
@@ -38,7 +38,7 @@
                 </tbody>
             </table>
         </div>
-        @if ($brands->hasPages())<div class="card-footer">{{ $brands->links() }}</div>@endif
+        @if ($brands->total() > 0)<div class="card-footer">@include('admin.shared.pagination', ['paginator' => $brands])</div>@endif
     </div>
 </main>
 @endsection

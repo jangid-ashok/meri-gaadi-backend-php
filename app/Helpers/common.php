@@ -12,3 +12,14 @@ if (!function_exists('sanitizeInputArray')) {
         return $input;
     }
 }
+
+if (!function_exists('media_image_url')) {
+    function media_image_url(?string $path, string $legacyDisk): ?string
+    {
+        if (! $path) return null;
+        if (str_starts_with($path, 'images/') || str_starts_with($path, 'media/images/')) {
+            return \Illuminate\Support\Facades\Storage::disk('media')->url($path);
+        }
+        return \Illuminate\Support\Facades\Storage::disk($legacyDisk)->url($path);
+    }
+}

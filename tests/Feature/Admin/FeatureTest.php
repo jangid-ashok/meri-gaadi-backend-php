@@ -79,6 +79,7 @@ class FeatureTest extends TestCase
         $sunroof = Feature::create(['category_id' => $category->id, 'name' => 'Sunroof', 'slug' => 'sunroof', 'status' => 'active']);
         $climate = Feature::create(['category_id' => $category->id, 'name' => 'Automatic Climate Control', 'slug' => 'automatic-climate-control', 'status' => 'active']);
 
+        $this->actingAs($admin)->postJson('/api/admin/variants/'.$variant->id.'/features', [])->assertUnprocessable()->assertJsonValidationErrors(['features']);
         $this->actingAs($admin)->postJson('/api/admin/variants/'.$variant->id.'/features', [[
             'feature_id' => $sunroof->id,
             'value' => 'true',

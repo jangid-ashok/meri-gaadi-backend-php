@@ -41,7 +41,7 @@ App\Models\SpecificationDefinition::DATA_TYPES as $type)
                                 <a class="btn btn-sm btn-icon btn-outline-primary ms-1" href="{{ route('admin.specification-definitions.edit', $definition) }}" title="Edit {{ $definition->name }}"><i class="bx bx-edit"></i></a>
                             @endif
                             @if (Auth::user()->hasPermission('specification_definitions.delete'))
-                                <form class="d-inline" method="POST" action="{{ route('admin.specification-definitions.destroy', $definition) }}" onsubmit="return confirm('Delete {{ addslashes($definition->name) }}?')">@csrf @method('DELETE')<button class="btn btn-sm btn-icon btn-outline-danger ms-1" type="submit" title="Delete {{ $definition->name }}"><i class="bx bx-trash"></i></button></form>
+                                <form class="d-inline" method="POST" action="{{ route('admin.specification-definitions.destroy', $definition) }}" data-confirm="Delete {{ $definition->name }}?">@csrf @method('DELETE')<button class="btn btn-sm btn-icon btn-outline-danger ms-1" type="submit" title="Delete {{ $definition->name }}"><i class="bx bx-trash"></i></button></form>
                             @endif
                         </td>
                     </tr>
@@ -51,7 +51,7 @@ App\Models\SpecificationDefinition::DATA_TYPES as $type)
                 </tbody>
             </table>
         </div>
-        @if ($definitions->hasPages())<div class="card-footer">{{ $definitions->links() }}</div>@endif
+        @if ($definitions->total() > 0)<div class="card-footer">@include('admin.shared.pagination', ['paginator' => $definitions])</div>@endif
     </div>
 </main>
 @endsection

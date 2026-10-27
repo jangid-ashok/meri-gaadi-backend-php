@@ -5,6 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
 use App\Models\CarModel;
+use App\Models\CarUseCase;
+use App\Models\Media;
+use App\Services\MediaService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -14,7 +18,7 @@ class CarModelController extends Controller
 {
     public function index(Request $request)
     {
-        $cars = $this->query($request)->with('brand:id,name,logo')->paginate(15)->withQueryString();
+        $cars = $this->paginateRequest($request, $this->query($request)->with('brand:id,name,logo'));
         if ($request->expectsJson()) return response()->json(['data' => $cars]);
         return view('admin.cars.index', [
             'cars' => $cars, 'brands' => Brand::orderBy('name')->get(['id', 'name']),
@@ -30,10 +34,30 @@ class CarModelController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        $mediaId = $data['thumbnail_media_id'] ?? null;
+        abort_unless(! $mediaId || $request->user()->hasPermission('media.view'), 403);
+        unset($data['thumbnail_media_id']);
         $data['name'] = trim($data['name']);
         $data['slug'] = $this->uniqueSlug($data['brand_id'], $data['name']);
-        $data['thumbnail'] = $this->storeThumbnail($request);
-        $car = CarModel::create($data);
+        $useCaseIds = $this->useCaseIds($data['use_cases'] ?? []);
+        unset($data['use_cases']);
+        $uploadedThumbnail = $request->hasFile('thumbnail')
+            ? $this->storeThumbnail($request, app(MediaService::class))
+            : null;
+        $data['thumbnail'] = $request->hasFile('thumbnail')
+            ? $uploadedThumbnail
+            : ($mediaId ? Media::where('disk', 'media')->findOrFail($mediaId)->path : null);
+        try {
+            $car = DB::transaction(function () use ($data, $useCaseIds) {
+                $car = CarModel::create($data);
+                $car->useCases()->sync($useCaseIds);
+
+                return $car;
+            });
+        } catch (\Throwable $exception) {
+            if ($uploadedThumbnail) app(MediaService::class)->cleanupNewUpload($uploadedThumbnail);
+            throw $exception;
+        }
         if ($request->expectsJson()) return response()->json(['data' => $car->load('brand')], 201);
         return redirect()->route('admin.cars.show', $car)->with('status', 'Car model created successfully.');
     }
@@ -53,21 +77,44 @@ class CarModelController extends Controller
     public function update(Request $request, CarModel $car)
     {
         $data = $this->validated($request, $car);
+        $mediaId = $data['thumbnail_media_id'] ?? null;
+        abort_unless(! $mediaId || $request->user()->hasPermission('media.view'), 403);
+        unset($data['thumbnail_media_id']);
         $data['name'] = trim($data['name']);
         $data['slug'] = $this->uniqueSlug($data['brand_id'], $data['name'], $car);
-        if ($request->hasFile('thumbnail')) {
-            $this->deleteThumbnail($car->thumbnail);
-            $data['thumbnail'] = $this->storeThumbnail($request);
+        $syncUseCases = array_key_exists('use_cases', $data) || $request->boolean('use_cases_present');
+        $useCaseIds = $syncUseCases ? $this->useCaseIds($data['use_cases'] ?? []) : [];
+        unset($data['use_cases']);
+        $oldThumbnail = null;
+        $uploadedThumbnail = null;
+        if ($request->hasFile('thumbnail') || $mediaId) {
+            $oldThumbnail = $car->thumbnail;
+            $uploadedThumbnail = $request->hasFile('thumbnail') ? $this->storeThumbnail($request, app(MediaService::class)) : null;
+            $data['thumbnail'] = $request->hasFile('thumbnail')
+                ? $uploadedThumbnail
+                : Media::where('disk', 'media')->findOrFail($mediaId)->path;
         }
-        $car->update($data);
+        try {
+            DB::transaction(function () use ($car, $data, $useCaseIds, $syncUseCases) {
+                $car->update($data);
+                if ($syncUseCases) {
+                    $car->useCases()->sync($useCaseIds);
+                }
+            });
+        } catch (\Throwable $exception) {
+            if ($uploadedThumbnail) app(MediaService::class)->cleanupNewUpload($uploadedThumbnail);
+            throw $exception;
+        }
+        if ($oldThumbnail) $this->deleteThumbnail($oldThumbnail);
         if ($request->expectsJson()) return response()->json(['data' => $car->fresh()->load('brand')]);
         return redirect()->route('admin.cars.show', $car)->with('status', 'Car model updated successfully.');
     }
 
     public function destroy(CarModel $car)
     {
-        $this->deleteThumbnail($car->thumbnail);
+        $thumbnail = $car->thumbnail;
         $car->delete();
+        $this->deleteThumbnail($thumbnail);
         if (request()->expectsJson()) return response()->noContent();
         return redirect()->route('admin.cars.index')->with('status', 'Car model deleted successfully.');
     }
@@ -85,7 +132,19 @@ class CarModelController extends Controller
 
     private function formData(CarModel $car, string $title): array
     {
-        return ['car' => $car, 'brands' => Brand::orderBy('name')->get(['id', 'name']), 'bodyTypes' => CarModel::BODY_TYPES, 'fuelTypes' => CarModel::FUEL_TYPES, 'transmissionTypes' => CarModel::TRANSMISSION_TYPES, 'page_title' => $title, 'leftMenuActive' => 'cars'];
+        $car->loadMissing('useCases');
+
+        return [
+            'car' => $car,
+            'selectedUseCases' => $car->useCases->pluck('slug')->all(),
+            'brands' => Brand::orderBy('name')->get(['id', 'name']),
+            'bodyTypes' => CarModel::BODY_TYPES,
+            'fuelTypes' => CarModel::FUEL_TYPES,
+            'transmissionTypes' => CarModel::TRANSMISSION_TYPES,
+            'lifestyleUseCases' => array_diff_key(config('constants.CAR_USE_CASES'), ['electric' => true]),
+            'page_title' => $title,
+            'leftMenuActive' => 'cars',
+        ];
     }
 
     private function validated(Request $request, ?CarModel $car = null): array
@@ -100,20 +159,26 @@ class CarModelController extends Controller
             'body_type' => ['nullable', Rule::in(CarModel::BODY_TYPES)],
             'fuel_types' => ['nullable', 'array'], 'fuel_types.*' => [Rule::in(CarModel::FUEL_TYPES)],
             'transmission_types' => ['nullable', 'array'], 'transmission_types.*' => [Rule::in(CarModel::TRANSMISSION_TYPES)],
+            'use_cases' => ['nullable', 'array'],
+            'use_cases.*' => ['required', 'string', Rule::in(array_diff(array_keys(config('constants.CAR_USE_CASES')), ['electric']))],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'sort_order' => ['nullable', 'integer', 'min:0'],
-            'thumbnail' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,svg,avif'],
+            'thumbnail' => ['nullable', 'file', 'max:'.config('media.max_image_kb', 5120)],
+            'thumbnail_media_id' => ['nullable', Rule::exists('media', 'id')->where(fn ($query) => $query->where('disk', 'media')->whereNull('blog_id')->whereNotNull('created_by'))],
         ]);
-
-        if ($request->hasFile('thumbnail') && strtolower($request->file('thumbnail')->getClientOriginalExtension()) === 'svg') {
-            $contents = file_get_contents($request->file('thumbnail')->getRealPath());
-            abort_if((bool) preg_match('/<script|javascript:|on[a-z]+\s*=/i', $contents), 422, 'The thumbnail contains unsafe SVG content.');
-        }
 
         $data['fuel_types'] = $request->input('fuel_types', []);
         $data['transmission_types'] = $request->input('transmission_types', []);
+        if ($request->exists('use_cases') || $request->boolean('use_cases_present')) {
+            $data['use_cases'] = array_values(array_unique($request->input('use_cases') ?? []));
+        }
 
         return $data;
+    }
+
+    private function useCaseIds(array $slugs): array
+    {
+        return CarUseCase::whereIn('slug', $slugs)->pluck('id')->all();
     }
 
     private function uniqueSlug(int $brandId, string $name, ?CarModel $car = null): string
@@ -123,13 +188,16 @@ class CarModelController extends Controller
         return $slug;
     }
 
-    private function storeThumbnail(Request $request): ?string
+    private function storeThumbnail(Request $request, MediaService $mediaService): ?string
     {
-        return $request->hasFile('thumbnail') ? $request->file('thumbnail')->store('car-thumbnails', 'car_media') : null;
+        return $request->hasFile('thumbnail') ? $mediaService->store($request->file('thumbnail'), (int) $request->user()->id, null, 'media', 'thumbnail')->path : null;
     }
 
     private function deleteThumbnail(?string $path): void
     {
-        if ($path) Storage::disk('car_media')->delete($path);
+        if (! $path) return;
+        $media = Media::where('disk', 'media')->where('path', $path)->first();
+        if ($media) app(MediaService::class)->deleteIfUnreferenced($media);
+        else Storage::disk('car_media')->delete($path);
     }
 }

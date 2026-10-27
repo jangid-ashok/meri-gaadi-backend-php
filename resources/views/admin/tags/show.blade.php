@@ -1,0 +1,8 @@
+@extends('admin.layouts.app')
+
+@section('content')
+<main class="container-xxl flex-grow-1 container-p-y">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-6"><div><h1 class="h3 mb-1">{{ $tag->name }}</h1><p class="text-body-secondary mb-0">Tag details.</p></div><div class="d-flex gap-2"><a class="btn btn-outline-secondary" href="{{ route('admin.tags.index') }}">Back</a>@if(Auth::user()->hasPermission('tags.update'))<a class="btn btn-primary" href="{{ route('admin.tags.edit', $tag) }}">Edit</a>@endif</div></div>@if(session('status'))<div class="alert alert-success">{{ session('status') }}</div>@endif
+    <div class="card"><div class="card-body"><dl class="row mb-0"><dt class="col-sm-3">Name</dt><dd class="col-sm-9">{{ $tag->name }}</dd><dt class="col-sm-3">Slug</dt><dd class="col-sm-9">{{ $tag->slug }}</dd><dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ ucfirst($tag->status) }}</dd><dt class="col-sm-3">Sort order</dt><dd class="col-sm-9">{{ $tag->sort_order }}</dd><dt class="col-sm-3">Usage</dt><dd class="col-sm-9">{{ $tag->blogs_count }} blog records</dd><dt class="col-sm-3">Description</dt><dd class="col-sm-9">{!! nl2br(e($tag->description ?: '—')) !!}</dd><dt class="col-sm-3">Created</dt><dd class="col-sm-9">{{ $tag->created_at?->format('d M Y H:i') }}</dd><dt class="col-sm-3">Updated</dt><dd class="col-sm-9">{{ $tag->updated_at?->format('d M Y H:i') }}</dd></dl></div></div>
+</main>
+@endsection

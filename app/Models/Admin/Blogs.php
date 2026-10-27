@@ -3,11 +3,15 @@
 namespace App\Models\Admin;
 
 use App\Models\User;
+use App\Models\Category;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
+use App\Models\SeoMeta;
 
 class Blogs extends Model {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'user_id',
@@ -21,6 +25,10 @@ class Blogs extends Model {
         'deleted_at',
         'status',
         'published_at',
+        'excerpt',
+        'featured_image',
+        'category_id',
+        'publication_status',
     ];
 
     protected $casts = [
@@ -30,6 +38,16 @@ class Blogs extends Model {
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function category()
+    {
+        return $this->belongsTo(Category::class)->withTrashed();
+    }
+
+    public function author()
+    {
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function categories()
@@ -53,4 +71,6 @@ class Blogs extends Model {
     {
         return $this->hasMany(BlogMedia::class, 'blog_id');
     }
+
+    public function seoMeta(): MorphOne { return $this->morphOne(SeoMeta::class, 'seoable'); }
 }

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Brand;
+use App\Models\Media;
+use App\Services\MediaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -13,7 +15,7 @@ class BrandController extends Controller
 {
     public function index(Request $request)
     {
-        $brands = $this->query($request)->paginate(15)->withQueryString();
+        $brands = $this->paginateRequest($request, $this->query($request));
 
         if ($request->expectsJson()) {
             return response()->json(['data' => $brands]);
@@ -38,11 +40,24 @@ class BrandController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        $mediaId = $data['logo_media_id'] ?? null;
+        abort_unless(! $mediaId || $request->user()->hasPermission('media.view'), 403);
+        unset($data['logo_media_id']);
         $data['name'] = trim($data['name']);
         $data['slug'] = $this->uniqueSlug($data['name']);
-        $data['logo'] = $this->storeLogo($request);
+        $uploadedLogo = $request->hasFile('logo')
+            ? $this->storeLogo($request, app(MediaService::class))
+            : null;
+        $data['logo'] = $request->hasFile('logo')
+            ? $uploadedLogo
+            : ($mediaId ? Media::where('disk', 'media')->findOrFail($mediaId)->path : null);
 
-        $brand = Brand::create($data);
+        try {
+            $brand = Brand::create($data);
+        } catch (\Throwable $exception) {
+            if ($uploadedLogo) app(MediaService::class)->cleanupNewUpload($uploadedLogo);
+            throw $exception;
+        }
 
         if ($request->expectsJson()) {
             return response()->json(['data' => $brand], 201);
@@ -76,15 +91,28 @@ class BrandController extends Controller
     public function update(Request $request, Brand $brand)
     {
         $data = $this->validated($request, $brand);
+        $mediaId = $data['logo_media_id'] ?? null;
+        abort_unless(! $mediaId || $request->user()->hasPermission('media.view'), 403);
+        unset($data['logo_media_id']);
         $data['name'] = trim($data['name']);
         $data['slug'] = $this->uniqueSlug($data['name'], $brand);
 
-        if ($request->hasFile('logo')) {
-            $this->deleteLogo($brand->logo);
-            $data['logo'] = $this->storeLogo($request);
+        $uploadedLogo = null;
+        if ($request->hasFile('logo') || $mediaId) {
+            $oldLogo = $brand->logo;
+            $uploadedLogo = $request->hasFile('logo') ? $this->storeLogo($request, app(MediaService::class)) : null;
+            $data['logo'] = $request->hasFile('logo')
+                ? $uploadedLogo
+                : Media::where('disk', 'media')->findOrFail($mediaId)->path;
         }
 
-        $brand->update($data);
+        try {
+            $brand->update($data);
+        } catch (\Throwable $exception) {
+            if ($uploadedLogo) app(MediaService::class)->cleanupNewUpload($uploadedLogo);
+            throw $exception;
+        }
+        if (isset($oldLogo) && $oldLogo) $this->deleteLogo($oldLogo);
 
         if ($request->expectsJson()) {
             return response()->json(['data' => $brand->fresh()]);
@@ -95,8 +123,9 @@ class BrandController extends Controller
 
     public function destroy(Brand $brand)
     {
-        $this->deleteLogo($brand->logo);
+        $logo = $brand->logo;
         $brand->delete();
+        $this->deleteLogo($logo);
 
         if (request()->expectsJson()) {
             return response()->noContent();
@@ -135,13 +164,9 @@ class BrandController extends Controller
             'founded_year' => ['nullable', 'integer', 'min:1800', 'max:' . now()->year],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'sort_order' => ['nullable', 'integer', 'min:0'],
-            'logo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,svg', 'max:2048'],
+            'logo' => ['nullable', 'file', 'max:'.config('media.max_image_kb', 5120)],
+            'logo_media_id' => ['nullable', Rule::exists('media', 'id')->where(fn ($query) => $query->where('disk', 'media')->whereNull('blog_id')->whereNotNull('created_by'))],
         ]);
-
-        if ($request->hasFile('logo') && strtolower($request->file('logo')->getClientOriginalExtension()) === 'svg') {
-            $contents = file_get_contents($request->file('logo')->getRealPath());
-            abort_if((bool) preg_match('/<script|javascript:|on[a-z]+\s*=/i', $contents), 422, 'The logo contains unsafe SVG content.');
-        }
 
         return $data;
     }
@@ -159,15 +184,18 @@ class BrandController extends Controller
         return $slug;
     }
 
-    private function storeLogo(Request $request): ?string
+    private function storeLogo(Request $request, MediaService $mediaService): ?string
     {
-        return $request->hasFile('logo') ? $request->file('logo')->store('brand-logos', 'brand_media') : null;
+        return $request->hasFile('logo') ? $mediaService->store($request->file('logo'), (int) $request->user()->id, null, 'media', 'logo')->path : null;
     }
 
     private function deleteLogo(?string $logo): void
     {
         if ($logo) {
-            Storage::disk('brand_media')->delete($logo);
+            $media = Media::where('disk', 'media')->where('path', $logo)->first();
+            if (! $media) $media = Media::where('disk', 'brand_media')->where('path', $logo)->first();
+            if ($media) app(MediaService::class)->deleteIfUnreferenced($media);
+            else Storage::disk('brand_media')->delete($logo);
         }
     }
 }

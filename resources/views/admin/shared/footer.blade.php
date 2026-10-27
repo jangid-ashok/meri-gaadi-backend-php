@@ -10,7 +10,6 @@
 	</div>
 </footer>
 <input type="hidden" id="pageType" value="{{ $pageType ?? '' }}" />
-<input type="hidden" id="pageLimit" value="{{ config('constants.PAGE_LIMIT') }}" />
 <!-- / Footer -->
 
 <!-- Overlay -->

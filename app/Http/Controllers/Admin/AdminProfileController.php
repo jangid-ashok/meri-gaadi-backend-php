@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Media;
+use App\Services\MediaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules;
 
 class AdminProfileController extends Controller
@@ -18,15 +21,28 @@ class AdminProfileController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'profile_image' => ['nullable', 'image', 'max:2048'],
+            'profile_image' => ['nullable', 'file', 'max:'.config('media.max_image_kb', 5120)],
         ]);
 
         $user = $request->user();
         $user->name = $request->name;
+        $oldImage = $user->profile_image;
+        $uploadedImage = null;
         if ($request->hasFile('profile_image')) {
-            $user->profile_image = $request->file('profile_image')->store('profile-images', 'public');
+            $uploadedImage = app(MediaService::class)->store($request->file('profile_image'), (int) $user->id, null, 'media', 'profile_image')->path;
+            $user->profile_image = $uploadedImage;
         }
-        $user->save();
+        try {
+            $user->save();
+        } catch (\Throwable $exception) {
+            if ($uploadedImage) app(MediaService::class)->cleanupNewUpload($uploadedImage);
+            throw $exception;
+        }
+        if ($oldImage && $request->hasFile('profile_image')) {
+            $media = Media::where('disk', 'media')->where('path', $oldImage)->first();
+            if ($media) app(MediaService::class)->deleteIfUnreferenced($media);
+            elseif (! \App\Models\User::where('profile_image', $oldImage)->exists()) Storage::disk('public')->delete($oldImage);
+        }
 
         return back()->with('status', __('Profile updated successfully.'));
     }

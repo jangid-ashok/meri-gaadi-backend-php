@@ -32,15 +32,17 @@
                                     <a class="btn add-new btn-primary rounded-pill" tabindex="0" href="{{ url('admin/blog/create') }}"><span><i class="icon-base bx bx-plus me-0 me-sm-1 icon-xs"></i><span class="d-none d-sm-inline-block">Add New Blog</span></span></a>
                                 </div>
                             </div>
-                            <div class="row mx-3 mb-3 align-items-center flex-wrap gap-2">
+                            <form method="GET" class="row mx-3 mb-3 align-items-end flex-wrap gap-2">
+                                @if(request()->filled('per_page'))<input type="hidden" name="per_page" value="{{ request('per_page') }}">@endif
                                 <div class="col-auto flex-grow-1" style="min-width: 200px;">
-                                    <input type="text" class="form-control" id="blog-keyword" placeholder="Search by title, subtitle, slug…" value="" />
+                                    <label class="form-label" for="blog-keyword">Search blogs</label>
+                                    <input type="search" class="form-control" id="blog-keyword" name="search" placeholder="Title, subtitle, or slug" value="{{ request('search') }}" />
                                 </div>
-                                <div class="col-auto">
-                                    <button type="button" class="btn btn-primary rounded-pill" id="blog-search-btn">Search</button>
-                                    <button type="button" class="btn btn-outline-secondary rounded-pill" id="blog-search-reset">Clear</button>
+                                <div class="col-auto d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary">Search</button>
+                                    @if(request()->filled('search'))<a href="{{ url('admin/blogs') }}" class="btn btn-outline-secondary">Clear</a>@endif
                                 </div>
-                            </div>
+                            </form>
                             <div class="alert-message-div" style="display: none;">
                                 <div class="alert alert-dismissible" role="alert">
                                     <span class="error-message"></span>
@@ -59,14 +61,10 @@
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody class="table-border-bottom-0" id="get-blog-list">
-                                        <tr class="text-center">
-                                            <td colspan="5"><strong>No Blogs found</strong></td>
-                                        </tr>
-                                    </tbody>
+                                    <tbody class="table-border-bottom-0">@include('admin.blogs.getBlogList', ['blogs' => $blogs])</tbody>
                                 </table>
                             </div>
-                            <div class="pagination-div"></div>
+                            @if($blogs->total() > 0)<div class="card-footer">@include('admin.shared.pagination', ['paginator' => $blogs])</div>@endif
                         </div>
                         <!--/ Hoverable Table rows -->
                         <hr class="my-12" />

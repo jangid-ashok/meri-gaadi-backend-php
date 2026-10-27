@@ -49,55 +49,6 @@ $(document).on('submit', '#blogForm', function (e) {
     });
 });
 
-/***************** Blogs List *****************/
-$(document).ready(() => {
-    if (pageType == 'list') {
-        getBlogs();
-    }
-});
-
-$(document).on('click', '.pagination-link', function (e) {
-    e.preventDefault();
-
-    const page = parseInt($(this).data('page'));
-    if (!isNaN(page)) {
-        getBlogs(page, $('#blog-keyword').val() || '');
-    }
-});
-
-$('#blog-search-btn').on('click', function () {
-    getBlogs(1, $('#blog-keyword').val() || '');
-});
-
-$('#blog-search-reset').on('click', function () {
-    $('#blog-keyword').val('');
-    getBlogs(1, '');
-});
-
-$(document).on('keydown', '#blog-keyword', function (e) {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        getBlogs(1, $(this).val() || '');
-    }
-});
-
-function getBlogs(pageNo = 1, keyword = '') {
-    $.ajax({
-        type: 'get',
-        url: 'get-blogs',
-        data: { page: pageNo, keyword: keyword },
-        dataType: 'json',
-        beforeSend: () => {
-            showTableLoader('#get-blog-list');
-        },
-        success: (response) => {
-            $('#get-blog-list').html(response.html);
-            $('.pagination-div').html(buildPagination(response.total_records, pageLimit, pageNo));
-        }
-
-    });
-}
-
 $(document).on('click', '.delete-popup-btn', function (e) {
     e.preventDefault();
 
@@ -140,9 +91,6 @@ $(document).on('submit', '#deleteForm', function(e) {
                 showAlertMessages($('.alert-message-div'), res.messageClass, res.message, res.redirectURL);
                 $submitBtn.attr('disabled', false);
                 $submitBtn.html($submitBtnHTML);
-                if (res.success && pageType === 'list' && !res.redirectURL) {
-                    getBlogs(1, $('#blog-keyword').val() || '');
-                }
 			},
 			error: (error) => {
 				console.log('Error: '+error);

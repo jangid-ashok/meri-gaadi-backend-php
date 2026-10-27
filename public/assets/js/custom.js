@@ -1,5 +1,4 @@
 const pageType = $('#pageType').val();
-const pageLimit = $('#pageLimit').val();
 $(document).on('click', '.alert-close-btn', function (e) {
     e.preventDefault();
     closeAlertMessages($(this));
@@ -74,6 +73,40 @@ function handleAjaxFormResponse($form, res, $submitBtn, buttonHTML, resetOnSucce
     }
     showAlertMessages($('.alert-message-div'), res.messageClass || 'alert-danger', commonMessage);
 }
+
+function confirmAdminAction(message = 'Are you sure you want to continue?') {
+    const modalElement = document.getElementById('admin-confirm-modal');
+    if (!modalElement || typeof bootstrap === 'undefined') return Promise.resolve(false);
+
+    return new Promise((resolve) => {
+        const instance = bootstrap.Modal.getOrCreateInstance(modalElement);
+        const confirmButton = modalElement.querySelector('#admin-confirm-submit');
+        let confirmed = false;
+        modalElement.querySelector('#admin-confirm-message').textContent = message;
+        confirmButton.onclick = () => {
+            confirmed = true;
+            instance.hide();
+            resolve(true);
+        };
+        modalElement.addEventListener('hidden.bs.modal', () => {
+            if (!confirmed) resolve(false);
+        }, { once: true });
+        instance.show();
+    });
+}
+
+$(document).on('submit', 'form[data-confirm]', async function (event) {
+    if (this.dataset.confirmed === 'true') {
+        delete this.dataset.confirmed;
+        return;
+    }
+
+    event.preventDefault();
+    if (await confirmAdminAction(this.dataset.confirm)) {
+        this.dataset.confirmed = 'true';
+        this.requestSubmit();
+    }
+});
 
 $(document).on('input change', 'form .is-invalid', function () {
     $(this).removeClass('is-invalid');
@@ -150,98 +183,3 @@ $(document).on('input paste', '.create-slug', function () {
         handleSlugGeneration($this);
     }, 10);
 });
-
-/* function buildPagination(currentPage, totalRecords) {
-    let html = `
-    <nav aria-label="Page navigation">
-        <ul class="pagination justify-content-center">
-            <li class="page-item prev ${currentPage === 1 ? 'disabled' : ''}">
-                <a class="page-link pagination-link" href="javascript:void(0);" data-page="${currentPage - 1}">
-                    <i class="icon-base bx bx-chevrons-left icon-sm"></i>
-                </a>
-            </li>`;
-
-    for (let i = 1; i <= totalRecords; i++) {
-        html += `
-            <li class="page-item ${i === currentPage ? 'active' : ''}">
-                <a class="page-link pagination-link" href="javascript:void(0);" data-page="${i}">${i}</a>
-            </li>`;
-    }
-
-    html += `
-            <li class="page-item next ${currentPage === totalRecords ? 'disabled' : ''}">
-                <a class="page-link pagination-link" href="javascript:void(0);" data-page="${currentPage + 1}">
-                    <i class="icon-base bx bx-chevrons-right icon-sm"></i>
-                </a>
-            </li>
-        </ul>
-    </nav>`;
-
-    $('.pagination-link').html(html);
-} */
-
-
-function buildPagination(record_count, per_page, current_page) {
-    record_count = parseInt(record_count);
-    per_page = parseInt(per_page);
-    current_page = parseInt(current_page);
-
-    let no_of_pages = Math.ceil(record_count / per_page);
-    let page_end = (current_page + 5 > no_of_pages) ? no_of_pages : Math.max((current_page + 5), 10);
-    page_end = (page_end > no_of_pages) ? no_of_pages : page_end;
-    let page_start = (page_end - 9 <= 0) ? 1 : (page_end - 9);
-
-    let pagination_html = '';
-
-    if (record_count > per_page) {
-        pagination_html += `
-            <nav aria-label="Page navigation">
-                <ul class="pagination justify-content-center">`;
-
-        // Prev button
-        if (current_page !== 1) {
-            pagination_html += `
-                    <li class="page-item prev">
-                        <a class="page-link pagination-link" href="javascript:void(0);" data-page="${current_page - 1}">
-                            <i class="icon-base bx bx-chevrons-left icon-sm"></i>
-                        </a>
-                    </li>`;
-        } else {
-            pagination_html += `
-                    <li class="page-item prev disabled">
-                        <a class="page-link" href="javascript:void(0);">
-                            <i class="icon-base bx bx-chevrons-left icon-sm"></i>
-                        </a>
-                    </li>`;
-        }
-
-        // Page numbers
-        for (let i = page_start; i <= page_end; i++) {
-            pagination_html += `
-                    <li class="page-item ${i === current_page ? 'active' : ''}">
-                        <a class="page-link pagination-link" href="javascript:void(0);" data-page="${i}">${i}</a>
-                    </li>`;
-        }
-
-        // Next button
-        if (current_page !== no_of_pages) {
-            pagination_html += `
-                    <li class="page-item next">
-                        <a class="page-link pagination-link" href="javascript:void(0);" data-page="${current_page + 1}">
-                            <i class="icon-base bx bx-chevrons-right icon-sm"></i>
-                        </a>
-                    </li>`;
-        } else {
-            pagination_html += `
-                    <li class="page-item next disabled">
-                        <a class="page-link" href="javascript:void(0);">
-                            <i class="icon-base bx bx-chevrons-right icon-sm"></i>
-                        </a>
-                    </li>`;
-        }
-
-        pagination_html += `</ul></nav>`;
-    }
-
-    return pagination_html;
-}

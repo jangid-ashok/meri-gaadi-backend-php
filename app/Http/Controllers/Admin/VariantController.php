@@ -15,7 +15,7 @@ class VariantController extends Controller
 {
     public function index(Request $request)
     {
-        $variants = $this->query($request)->with('carModel.brand')->paginate(15)->withQueryString();
+        $variants = $this->paginateRequest($request, $this->query($request)->with('carModel.brand'));
 
         if ($request->expectsJson()) return response()->json(['data' => $variants]);
 

@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 class CarModel extends Model
 {
@@ -29,14 +31,28 @@ class CarModel extends Model
         'fuel_types' => 'array', 'transmission_types' => 'array',
     ];
 
+    protected $appends = ['thumbnail_url'];
+
+    public function getThumbnailUrlAttribute(): ?string
+    {
+        return media_image_url($this->thumbnail, 'car_media');
+    }
+
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
     }
 
+    public function seoMeta(): MorphOne { return $this->morphOne(SeoMeta::class, 'seoable'); }
+
     public function variants(): HasMany
     {
         return $this->hasMany(Variant::class);
+    }
+
+    public function useCases(): BelongsToMany
+    {
+        return $this->belongsToMany(CarUseCase::class, 'car_model_use_cases');
     }
 
     public function scopeActive(Builder $query): Builder

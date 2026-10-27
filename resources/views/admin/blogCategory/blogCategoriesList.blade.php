@@ -32,15 +32,17 @@
                                     <a class="btn add-new btn-primary rounded-pill" tabindex="0" href="{{ url('admin/blog-categories/create') }}"><span><i class="icon-base bx bx-plus me-0 me-sm-1 icon-xs"></i><span class="d-none d-sm-inline-block">Add New Category</span></span></a>
                                 </div>
                             </div>
-                            <div class="row mx-3 mb-3 align-items-center flex-wrap gap-2">
+                            <form method="GET" class="row mx-3 mb-3 align-items-end flex-wrap gap-2">
+                                @if(request()->filled('per_page'))<input type="hidden" name="per_page" value="{{ request('per_page') }}">@endif
                                 <div class="col-auto flex-grow-1" style="min-width: 200px;">
-                                    <input type="text" class="form-control" id="category-keyword" placeholder="Search by title, subtitle, slug…" value="" />
+                                    <label class="form-label" for="category-keyword">Search categories</label>
+                                    <input type="search" class="form-control" id="category-keyword" name="search" placeholder="Title, subtitle, or slug" value="{{ request('search') }}" />
                                 </div>
-                                <div class="col-auto">
-                                    <button type="button" class="btn btn-primary rounded-pill" id="category-search-btn">Search</button>
-                                    <button type="button" class="btn btn-outline-secondary rounded-pill" id="category-search-reset">Clear</button>
+                                <div class="col-auto d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary">Search</button>
+                                    @if(request()->filled('search'))<a href="{{ route('admin.blog-categories.index') }}" class="btn btn-outline-secondary">Clear</a>@endif
                                 </div>
-                            </div>
+                            </form>
                             <div class="alert-message-div" style="display: none;">
                                 <div class="alert alert-dismissible" role="alert">
                                     <span class="error-message"></span>
@@ -57,14 +59,10 @@
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody class="table-border-bottom-0" id="get-category-list">
-                                        <tr>
-                                            <td colspan="5">No Categories found</td>
-                                        </tr>
-                                    </tbody>
+                                    <tbody class="table-border-bottom-0">@include('admin.blogCategory.getBlogCategoryList', ['blogCategories' => $blogCategories])</tbody>
                                 </table>
                             </div>
-                            <div class="pagination-div"></div>
+                            @if($blogCategories->total() > 0)<div class="card-footer">@include('admin.shared.pagination', ['paginator' => $blogCategories])</div>@endif
                         </div>
                         <!--/ Hoverable Table rows -->
                         <hr class="my-12" />

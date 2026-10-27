@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use App\Services\AuditLogger;
 
 class RbacApiController extends Controller
 {
@@ -16,9 +17,9 @@ class RbacApiController extends Controller
         return response()->json(['data' => Permission::orderBy('module')->orderBy('name')->get(['id', 'name', 'slug', 'module', 'description'])]);
     }
 
-    public function roles()
+    public function roles(Request $request)
     {
-        return response()->json(['data' => Role::withCount(['users', 'permissions'])->latest()->paginate(15)]);
+        return response()->json(['data' => $this->paginateRequest($request, Role::withCount(['users', 'permissions'])->latest())]);
     }
 
     public function showRole(Role $role)
@@ -32,6 +33,7 @@ class RbacApiController extends Controller
         $this->guardPermissionSet($request, $data['permissions'] ?? []);
         $role = Role::create($data);
         $role->permissions()->sync($request->input('permissions', []));
+        app(AuditLogger::class)->record('permission_changed', 'Role', 'Assigned permissions to role "'.$role->name.'"', $role, [], ['permissions' => $role->permissions()->pluck('slug')->all()]);
         return response()->json(['data' => $role->load('permissions')], 201);
     }
 
@@ -40,8 +42,10 @@ class RbacApiController extends Controller
         abort_if($role->is_system, 403, 'System roles cannot be modified.');
         $data = $this->validated($request, $role);
         $this->guardPermissionSet($request, $data['permissions'] ?? []);
+        $oldPermissions = $role->permissions()->pluck('slug')->all();
         $role->update($data);
-        $role->permissions()->sync($request->input('permissions', []));
+        $sync = $role->permissions()->sync($request->input('permissions', []));
+        if ($sync['attached'] || $sync['detached']) app(AuditLogger::class)->record('permission_changed', 'Role', 'Changed permissions for role "'.$role->name.'"', $role, ['permissions' => $oldPermissions], ['permissions' => $role->permissions()->pluck('slug')->all()]);
         return response()->json(['data' => $role->load('permissions')]);
     }
 
@@ -70,7 +74,23 @@ class RbacApiController extends Controller
         }
         abort_if($request->user()->is($user) && $roles->doesntContain('slug', 'super-admin') && $request->user()->isSuperAdmin(), 403, 'The last Super Admin cannot be removed.');
 
+        $isRemovingSuperAdmin = $user->roles()->where('slug', 'super-admin')->exists()
+            && $roles->doesntContain('slug', 'super-admin');
+        if ($isRemovingSuperAdmin) {
+            abort_if($request->user()->is($user), 409, 'You cannot remove your own Super Admin access.');
+
+            $anotherActiveSuperAdminExists = User::where('is_admin', true)
+                ->where('status', 'active')
+                ->whereKeyNot($user->id)
+                ->whereHas('roles', fn ($query) => $query->where('slug', 'super-admin'))
+                ->exists();
+            abort_unless($anotherActiveSuperAdminExists, 409, 'The last active Super Admin cannot be reassigned.');
+        }
+
+        $oldRoles = $user->roles()->pluck('slug')->all();
         $user->roles()->sync($roles->modelKeys());
+        $newRoles = $user->roles()->pluck('slug')->all();
+        if ($oldRoles !== $newRoles) app(AuditLogger::class)->record('permission_changed', 'User', 'Changed roles for admin "'.$user->name.'"', $user, ['roles' => $oldRoles], ['roles' => $newRoles]);
         return response()->json(['data' => $user->roles()->get(['roles.id', 'name', 'slug'])]);
     }
 

@@ -67,9 +67,9 @@ if (dropzone) {
     });
 }
 
-$(document).on('click', '.gallery-delete-btn', function () {
+$(document).on('click', '.gallery-delete-btn', async function () {
     const mediaId = $(this).data('id');
-    if (!mediaId || !confirm('Remove this file from the gallery?')) {
+    if (!mediaId || !await confirmAdminAction('Remove this file from the gallery?')) {
         return;
     }
 

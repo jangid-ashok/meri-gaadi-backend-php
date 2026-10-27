@@ -13,7 +13,7 @@ class FeatureController extends Controller
 {
     public function index(Request $request)
     {
-        $features = $this->query($request)->with('category')->paginate(15)->withQueryString();
+        $features = $this->paginateRequest($request, $this->query($request)->with('category'));
 
         if ($request->expectsJson()) {
             return response()->json(['data' => $features]);

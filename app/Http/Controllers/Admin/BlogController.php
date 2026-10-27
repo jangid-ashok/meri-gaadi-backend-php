@@ -7,9 +7,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 use App\Models\Admin\BlogCategory;
 use App\Models\Admin\BlogMedia;
 use App\Models\Admin\Blogs;
+use App\Models\Media;
+use App\Services\MediaService;
 
 class BlogController extends Controller {
 
@@ -21,38 +24,17 @@ class BlogController extends Controller {
         $this->blogModel = new Blogs();
     }
 
-    public function index() {
-        $data = [];
-        $data['page_title'] = 'Blogs';
-        $data['pageType'] = 'list';
-        $data['leftMenuActive'] = 'blogs';
-        return view('admin/blogs/blogsList', $data);
-    }
-
-    public function getBlogsList(Request $request) {
-        $data = [];
-        $pageNo = (int) $request->get('page', 1);
-        $keyword = $request->get('keyword');
-        $page_limit = config('constants.PAGE_LIMIT');
-        $query = $this->blogModel::query()->with('categories');
-        $query->where('is_deleted', 'no');
-        if (!empty($keyword)) {
-            $kw = '%' . $keyword . '%';
-            $query->where(function ($q) use ($kw) {
-                $q->where('title', 'like', $kw)
-                    ->orWhere('sub_title', 'like', $kw)
-                    ->orWhere('slug', 'like', $kw);
+    public function index(Request $request) {
+        $request->validate(['search' => ['nullable', 'string', 'max:255']]);
+        $query = $this->blogModel::query()->with('categories')->where('is_deleted', 'no')
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $term = '%'.addcslashes(trim($request->input('search')), '%_').'%';
+                $query->where(fn ($q) => $q->where('title', 'like', $term)->orWhere('sub_title', 'like', $term)->orWhere('slug', 'like', $term));
             });
-        }
-        $count = $query->count();
-        $records = $query->latest()->skip(($pageNo - 1) * $page_limit)->take($page_limit)->get();
-        // echo '<pre>';print_r($count);
-        // echo '<pre>';print_r($records);die;
-        $data['blogs'] = $records;
-        $html = view('admin.blogs.getBlogList', $data)->render();
-        return response()->json([
-            'total_records' => $count,
-            'html' => $html,
+
+        return view('admin/blogs/blogsList', [
+            'blogs' => $this->paginateRequest($request, $query->latest()),
+            'page_title' => 'Blogs', 'pageType' => 'list', 'leftMenuActive' => 'blogs',
         ]);
     }
 
@@ -92,17 +74,20 @@ class BlogController extends Controller {
         $msgClass = 'alert-danger';
         $message = 'Something went Wrong! Please Try again later.';
         $validator = Validator::make($request->all(), [
-            'category_ids' => 'required',
-            'title' => 'required',
-            'sub_title' => 'required',
-            'meta_title' => 'nullable',
+            'category_ids' => ['required', 'integer', Rule::exists('blog_categories', 'id')->where('status', 'active')->where('is_deleted', 'no')],
+            'title' => ['required', 'string', 'max:255'],
+            'sub_title' => ['required', 'string', 'max:255'],
+            'meta_title' => ['nullable', 'string', 'max:255'],
             'slug' => [
                 'required',
+                'string',
+                'max:255',
+                'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
                 Rule::unique('blogs', 'slug')->ignore($request->filled('id') ? $request->id : null),
             ],
-            'meta_description' => 'nullable',
-            'description' => 'nullable',
-            'status' => 'in:active,inactive',
+            'meta_description' => ['nullable', 'string', 'max:2000'],
+            'description' => ['nullable', 'string'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
         ]);
 
         if ($validator->fails()) {
@@ -112,6 +97,10 @@ class BlogController extends Controller {
             $json['messageClass'] = $msgClass;
             $json['message'] = $message;
             return response()->json($json);
+        }
+
+        if ($request->input('status') === 'active') {
+            abort_unless($request->user()->hasPermission('articles.publish'), 403, 'You do not have permission to publish articles.');
         }
 
         try {
@@ -124,6 +113,7 @@ class BlogController extends Controller {
             $blogModel->meta_description = $request->meta_description;
             $blogModel->description = $request->description;
             $blogModel->status = $request->status;
+            $blogModel->publication_status = $request->status === 'active' ? 'published' : 'inactive';
             $blogModel->published_at = $request->status === 'active' ? now() : null;
             $blogModel->save();
 
@@ -151,17 +141,20 @@ class BlogController extends Controller {
 
         $validator = Validator::make($request->all(), [
             'id' => 'required|exists:blogs,id',
-            'category_ids' => 'required',
-            'title' => 'required',
-            'sub_title' => 'required',
-            'meta_title' => 'nullable',
+            'category_ids' => ['required', 'integer', Rule::exists('blog_categories', 'id')],
+            'title' => ['required', 'string', 'max:255'],
+            'sub_title' => ['required', 'string', 'max:255'],
+            'meta_title' => ['nullable', 'string', 'max:255'],
             'slug' => [
                 'required',
+                'string',
+                'max:255',
+                'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
                 Rule::unique('blogs', 'slug')->ignore($request->filled('id') ? $request->id : null),
             ],
-            'meta_description' => 'nullable',
-            'description' => 'nullable',
-            'status' => 'in:active,inactive',
+            'meta_description' => ['nullable', 'string', 'max:2000'],
+            'description' => ['nullable', 'string'],
+            'status' => ['required', Rule::in(['active', 'inactive'])],
         ]);
 
         if ($validator->fails()) {
@@ -173,8 +166,18 @@ class BlogController extends Controller {
             return response()->json($json);
         }
 
+        $blog = $this->blogModel::findOrFail($request->id);
+        $category = $this->categoryModel::findOrFail($request->input('category_ids'));
+        abort_unless(
+            ($category->status === 'active' && $category->is_deleted === 'no') || $blog->categories()->whereKey($category->id)->exists(),
+            422,
+            'Only active categories may be newly assigned.'
+        );
+        if ($request->input('status') !== $blog->status && ($request->input('status') === 'active' || $blog->status === 'active')) {
+            abort_unless($request->user()->hasPermission('articles.publish'), 403, 'You do not have permission to publish or unpublish articles.');
+        }
+
         try {
-            $blog = $this->blogModel::findOrFail($request->id);
             $blog->title = $request->title;
             $blog->sub_title = $request->sub_title;
             $blog->meta_title = $request->meta_title;
@@ -182,6 +185,7 @@ class BlogController extends Controller {
             $blog->meta_description = $request->meta_description;
             $blog->description = $request->description;
             $blog->status = $request->status;
+            $blog->publication_status = $request->status === 'active' ? 'published' : 'inactive';
 
             if ($request->status === 'active') {
                 $blog->published_at = $blog->published_at ?? now();
@@ -251,14 +255,14 @@ class BlogController extends Controller {
         return response()->json(['html' => $html]);
     }
 
-    public function uploadGalleryMedia(Request $request, $blogID) {
+    public function uploadGalleryMedia(Request $request, $blogID, MediaService $mediaService) {
         $json = [];
         $status = false;
         $msgClass = 'alert-danger';
         $message = 'Something went Wrong! Please try again later.';
 
         $blog = $this->blogModel::findOrFail($blogID);
-        $maxKb = (int) config('constants.BLOG_GALLERY_MAX_FILE_KB', 51200);
+        $maxKb = (int) config('media.max_video_kb', 51200);
 
         $validator = Validator::make($request->all(), [
             'files' => 'required|array|min:1',
@@ -293,18 +297,36 @@ class BlogController extends Controller {
                 $originalName = $file->getClientOriginalName();
                 $mime = $file->getMimeType();
                 $size = $file->getSize();
-                $storedName = time() . '-' . uniqid() . '.' . $file->getClientOriginalExtension();
-                $file->move($destinationPath, $storedName);
+                try {
+                    if (str_starts_with((string) $mime, 'image/')) {
+                        $mediaService->store($file, (int) $request->user()->id, null, 'media', 'files', (int) $blog->id);
+                        $uploaded++;
+                        continue;
+                    }
 
-                BlogMedia::create([
-                    'blog_id' => $blog->id,
-                    'file_name' => $originalName,
-                    'disk' => 'public',
-                    'path' => $storedName,
-                    'mime' => $mime,
-                    'size' => $size,
-                ]);
-                $uploaded++;
+                    $extension = strtolower($file->getClientOriginalExtension());
+                    $storedName = Str::uuid()->toString().'.'.$extension;
+                    $file->move($destinationPath, $storedName);
+                    try {
+                        BlogMedia::create([
+                            'blog_id' => $blog->id,
+                            'file_name' => $originalName,
+                            'disk' => 'public',
+                            'path' => $storedName,
+                            'mime' => $mime,
+                            'size' => $size,
+                        ]);
+                        $uploaded++;
+                    } catch (\Throwable $exception) {
+                        @unlink($destinationPath.DIRECTORY_SEPARATOR.$storedName);
+                        throw $exception;
+                    }
+                } catch (\Illuminate\Validation\ValidationException $exception) {
+                    $rejected[] = $originalName;
+                } catch (\Throwable $exception) {
+                    Log::error('Blog gallery file could not be stored.', ['filename' => $originalName]);
+                    $rejected[] = $originalName;
+                }
             }
 
             if ($uploaded > 0) {
@@ -315,7 +337,7 @@ class BlogController extends Controller {
                     $message .= ' Skipped: ' . implode(', ', $rejected);
                 }
             } else {
-                $message = 'No valid files uploaded. Allowed: images (jpg, png, webp, gif) and videos (mp4, webm, ogg, mov).';
+                $message = 'No valid files uploaded. Allowed: images (jpg, jpeg, png, gif, webp, avif where supported) and videos (mp4, webm, ogg, mov).';
             }
         } catch (\Throwable $e) {
             Log::error('Blog Gallery Upload Error: ' . $e->getMessage());
@@ -338,6 +360,16 @@ class BlogController extends Controller {
 
         try {
             $media = BlogMedia::findOrFail($id);
+            if ($media->disk === 'media' && $media->isImage()) {
+                app(MediaService::class)->deleteGalleryItem(Media::findOrFail($media->id));
+                $status = true;
+                $msgClass = 'alert-success';
+                $message = 'Media removed successfully.';
+                $json['success'] = $status;
+                $json['messageClass'] = $msgClass;
+                $json['message'] = $message;
+                return response()->json($json);
+            }
             $filePath = $media->fullDiskPath();
             if (is_file($filePath)) {
                 unlink($filePath);
@@ -361,9 +393,9 @@ class BlogController extends Controller {
         $mime = $file->getMimeType();
         $extension = strtolower($file->getClientOriginalExtension());
 
-        $imageMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+        $imageMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
         $videoMimes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime'];
-        $imageExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+        $imageExt = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'];
         $videoExt = ['mp4', 'webm', 'ogg', 'mov'];
 
         if (in_array($mime, $imageMimes, true) && in_array($extension, $imageExt, true)) {

@@ -37,7 +37,7 @@
                                 <a class="btn btn-sm btn-icon btn-outline-primary ms-1" href="{{ route('admin.feature-categories.edit', $category) }}" title="Edit {{ $category->name }}"><i class="bx bx-edit"></i></a>
                             @endif
                             @if (Auth::user()->hasPermission('feature_categories.delete'))
-                                <form class="d-inline" method="POST" action="{{ route('admin.feature-categories.destroy', $category) }}" onsubmit="return confirm('Delete {{ addslashes($category->name) }}?')">@csrf @method('DELETE')<button class="btn btn-sm btn-icon btn-outline-danger ms-1" type="submit" title="Delete {{ $category->name }}"><i class="bx bx-trash"></i></button></form>
+                                <form class="d-inline" method="POST" action="{{ route('admin.feature-categories.destroy', $category) }}" data-confirm="Delete {{ $category->name }}?">@csrf @method('DELETE')<button class="btn btn-sm btn-icon btn-outline-danger ms-1" type="submit" title="Delete {{ $category->name }}"><i class="bx bx-trash"></i></button></form>
                             @endif
                         </td>
                     </tr>
@@ -47,7 +47,7 @@
                 </tbody>
             </table>
         </div>
-        @if ($categories->hasPages())<div class="card-footer">{{ $categories->links() }}</div>@endif
+        @if ($categories->total() > 0)<div class="card-footer">@include('admin.shared.pagination', ['paginator' => $categories])</div>@endif
     </div>
 </main>
 @endsection

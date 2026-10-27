@@ -29,6 +29,41 @@ class CarModelTest extends TestCase
         $this->assertDatabaseHas('car_models', ['brand_id' => $brand->id, 'slug' => 'creta']);
     }
 
+    public function test_editorial_use_cases_can_be_assigned_and_updated_with_car_permissions(): void
+    {
+        $brand = Brand::create(['name' => 'Editorial Motors', 'slug' => 'editorial-motors', 'status' => 'active']);
+        $admin = $this->adminWithPermissions('cars.create', 'cars.update', 'cars.view');
+
+        $created = $this->actingAs($admin)->postJson('/api/admin/cars', array_merge($this->data($brand), [
+            'use_cases' => ['first-car', 'family'],
+        ]))->assertCreated();
+        $carId = $created->json('data.id');
+        $car = CarModel::findOrFail($carId);
+        $this->assertEqualsCanonicalizing(['first-car', 'family'], $car->useCases()->pluck('slug')->all());
+        $this->actingAs($admin)->get('/admin/cars/'.$carId.'/edit')->assertOk()
+            ->assertSee('name="use_cases[]" value="first-car" checked', false);
+
+        $this->putJson('/api/admin/cars/'.$carId, array_merge($this->data($brand), [
+            'name' => 'Compatibility Update',
+        ]))->assertOk();
+        $this->assertEqualsCanonicalizing(['first-car', 'family'], $car->fresh()->useCases()->pluck('slug')->all());
+
+        $this->putJson('/api/admin/cars/'.$carId, array_merge($this->data($brand), [
+            'name' => 'Updated Model', 'use_cases' => ['city', 'driving-fun', 'city'],
+        ]))->assertOk();
+        $this->assertEqualsCanonicalizing(['city', 'driving-fun'], $car->fresh()->useCases()->pluck('slug')->all());
+
+        $this->putJson('/api/admin/cars/'.$carId, array_merge($this->data($brand), [
+            'name' => 'Updated Model', 'use_cases' => ['unknown-category'],
+        ]))->assertUnprocessable()->assertJsonValidationErrors(['use_cases.0']);
+
+        $unauthorizedAdmin = $this->adminWithPermissions();
+        $this->actingAs($unauthorizedAdmin)->putJson('/api/admin/cars/'.$carId, array_merge($this->data($brand), [
+            'name' => 'Unauthorized Change', 'use_cases' => ['family'],
+        ]))->assertForbidden();
+        $this->assertEqualsCanonicalizing(['city', 'driving-fun'], $car->fresh()->useCases()->pluck('slug')->all());
+    }
+
     public function test_invalid_brand_duplicate_same_brand_and_years_are_rejected(): void
     {
         $admin = $this->adminWithPermissions('cars.create'); $brand = Brand::create(['name' => 'Tata Motors', 'slug' => 'tata-motors', 'status' => 'active']);
@@ -46,12 +81,12 @@ class CarModelTest extends TestCase
 
     public function test_car_can_be_updated_brand_changed_deleted_and_thumbnail_replaced(): void
     {
-        Storage::fake('car_media'); $admin = $this->adminWithPermissions('cars.create', 'cars.update', 'cars.delete'); $one = Brand::create(['name' => 'One', 'slug' => 'one', 'status' => 'active']); $two = Brand::create(['name' => 'Two', 'slug' => 'two', 'status' => 'active']);
+        Storage::fake('media'); $admin = $this->adminWithPermissions('cars.create', 'cars.update', 'cars.delete'); $one = Brand::create(['name' => 'One', 'slug' => 'one', 'status' => 'active']); $two = Brand::create(['name' => 'Two', 'slug' => 'two', 'status' => 'active']);
         $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
         $created = $this->actingAs($admin)->post('/api/admin/cars', array_merge($this->data($one), ['thumbnail' => UploadedFile::fake()->createWithContent('a.png', $png)]), ['Accept' => 'application/json']); $created->assertCreated();
         $car = CarModel::findOrFail($created->json('data.id')); $old = $car->thumbnail;
         $this->actingAs($admin)->post('/api/admin/cars/'.$car->id, ['_method' => 'PUT', 'brand_id' => $two->id, 'name' => 'Creta', 'status' => 'inactive', 'thumbnail' => UploadedFile::fake()->createWithContent('b.png', $png)], ['Accept' => 'application/json'])->assertOk();
-        $car->refresh(); $this->assertSame($two->id, $car->brand_id); Storage::disk('car_media')->assertMissing($old); Storage::disk('car_media')->assertExists($car->thumbnail);
+        $car->refresh(); $this->assertSame($two->id, $car->brand_id); Storage::disk('media')->assertMissing($old); Storage::disk('media')->assertExists($car->thumbnail);
         $this->actingAs($admin)->deleteJson('/api/admin/cars/'.$car->id)->assertNoContent(); $this->assertDatabaseMissing('car_models', ['id' => $car->id]);
     }
 

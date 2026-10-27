@@ -36,7 +36,7 @@
                                 <a class="btn btn-sm btn-icon btn-outline-primary ms-1" href="{{ route('admin.features.edit', $feature) }}" title="Edit {{ $feature->name }}"><i class="bx bx-edit"></i></a>
                             @endif
                             @if (Auth::user()->hasPermission('features.delete'))
-                                <form class="d-inline" method="POST" action="{{ route('admin.features.destroy', $feature) }}" onsubmit="return confirm('Delete {{ addslashes($feature->name) }}?')">@csrf @method('DELETE')<button class="btn btn-sm btn-icon btn-outline-danger ms-1" type="submit" title="Delete {{ $feature->name }}"><i class="bx bx-trash"></i></button></form>
+                                <form class="d-inline" method="POST" action="{{ route('admin.features.destroy', $feature) }}" data-confirm="Delete {{ $feature->name }}?">@csrf @method('DELETE')<button class="btn btn-sm btn-icon btn-outline-danger ms-1" type="submit" title="Delete {{ $feature->name }}"><i class="bx bx-trash"></i></button></form>
                             @endif
                         </td>
                     </tr>
@@ -46,7 +46,7 @@
                 </tbody>
             </table>
         </div>
-        @if ($features->hasPages())<div class="card-footer">{{ $features->links() }}</div>@endif
+        @if ($features->total() > 0)<div class="card-footer">@include('admin.shared.pagination', ['paginator' => $features])</div>@endif
     </div>
 </main>
 @endsection
